@@ -1,0 +1,6 @@
+{
+  "name": "XanCalc",
+  "description": "A modern, highly functional calculator featuring standard math operations, scientific calculations, and a comprehensive unit converter.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
