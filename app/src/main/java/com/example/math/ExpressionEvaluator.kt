@@ -11,6 +11,7 @@ object ExpressionEvaluator {
 
     private fun preprocess(expr: String): String {
         return expr
+            .replace(",", "")
             .replace("×", "*")
             .replace("÷", "/")
             .replace("π", "3.141592653589793")

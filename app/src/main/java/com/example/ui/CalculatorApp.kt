@@ -728,7 +728,7 @@ fun CalculatorDisplay(
                         horizontalArrangement = Arrangement.End
                     ) {
                         Text(
-                            text = previousCalculation,
+                            text = formatExpressionWithCommas(previousCalculation),
                             fontSize = if (isInPip) 10.sp else 16.sp,
                             fontWeight = FontWeight.Normal,
                             color = LightChalk.copy(alpha = 0.6f),
@@ -743,6 +743,9 @@ fun CalculatorDisplay(
 
                 // Expression display
                 val scrollState = rememberScrollState()
+                LaunchedEffect(expression, scrollState.maxValue) {
+                    scrollState.animateScrollTo(scrollState.maxValue)
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -750,7 +753,7 @@ fun CalculatorDisplay(
                     horizontalArrangement = Arrangement.End
                 ) {
                     Text(
-                        text = expression.ifEmpty { "0" },
+                        text = formatExpressionWithCommas(expression.ifEmpty { "0" }),
                         fontSize = if (isInPip) {
                             if (expression.length > 15) 12.sp else 16.sp
                         } else {
@@ -1042,7 +1045,7 @@ fun UnitConverterScreen(
                                         .horizontalScroll(rememberScrollState())
                                 ) {
                                     Text(
-                                        text = converterInput.ifEmpty { "0" },
+                                        text = formatExpressionWithCommas(converterInput.ifEmpty { "0" }),
                                         fontSize = 18.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White,
@@ -1290,13 +1293,16 @@ fun UnitConverterScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text("From", fontSize = if (isInPip) 7.sp else 11.sp, color = Color.Gray, fontWeight = FontWeight.SemiBold)
                             val fromScrollState = rememberScrollState()
+                            LaunchedEffect(converterInput, fromScrollState.maxValue) {
+                                fromScrollState.animateScrollTo(fromScrollState.maxValue)
+                            }
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .horizontalScroll(fromScrollState)
                             ) {
                                 Text(
-                                    text = converterInput.ifEmpty { "0" },
+                                    text = formatExpressionWithCommas(converterInput.ifEmpty { "0" }),
                                     fontSize = if (isInPip) 12.sp else 24.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
@@ -1676,7 +1682,7 @@ fun CurrencyConverterScreen(
                                         .horizontalScroll(rememberScrollState())
                                 ) {
                                     Text(
-                                        text = currencyInput.ifEmpty { "0" },
+                                        text = formatExpressionWithCommas(currencyInput.ifEmpty { "0" }),
                                         fontSize = 18.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White,
@@ -1890,13 +1896,16 @@ fun CurrencyConverterScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text("From", fontSize = if (isInPip) 7.sp else 11.sp, color = Color.Gray, fontWeight = FontWeight.SemiBold)
                             val fromScrollState = rememberScrollState()
+                            LaunchedEffect(currencyInput, fromScrollState.maxValue) {
+                                fromScrollState.animateScrollTo(fromScrollState.maxValue)
+                            }
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .horizontalScroll(fromScrollState)
                             ) {
                                 Text(
-                                    text = currencyInput.ifEmpty { "0" },
+                                    text = formatExpressionWithCommas(currencyInput.ifEmpty { "0" }),
                                     fontSize = if (isInPip) 11.sp else 24.spx(),
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
@@ -2243,7 +2252,7 @@ fun HistoryRow(
                 }
 
                 Text(
-                    text = item.expression,
+                    text = formatExpressionWithCommas(item.expression),
                     fontSize = if (isInPip) 10.sp else 16.spx(),
                     fontWeight = FontWeight.Medium,
                     color = LightChalk,

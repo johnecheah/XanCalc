@@ -313,15 +313,9 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
                     return
                 }
 
-                if (!isConsecutiveEquals && !isCalculation(currentExpr)) {
-                    _previewResult.value = ""
-                    _errorMessage.value = null
-                    didJustEvaluateValue = true
-                    return
-                }
-
-                var saveToHistory = true
-                var updatePreviousCalculation = true
+                val isCalc = isCalculation(currentExpr)
+                var saveToHistory = isCalc
+                var updatePreviousCalculation = isCalc
 
                 if (isConsecutiveEquals) {
                     saveToHistory = false
@@ -769,7 +763,7 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
 
     private fun formatCurrencyResult(value: Double): String {
         if (value.isNaN() || value.isInfinite()) return "0"
-        return if (value % 1.0 == 0.0) {
+        val rawStr = if (value % 1.0 == 0.0) {
             String.format(java.util.Locale.US, "%.0f", value)
         } else {
             val formatted = String.format(java.util.Locale.US, "%.4f", value)
@@ -783,6 +777,7 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
                 formatted
             }
         }
+        return formatExpressionWithCommas(rawStr)
     }
 
     fun saveCurrencyConversionToHistory() {
@@ -918,16 +913,19 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
     private fun formatResult(value: Double): String {
         if (value.isNaN()) return "Error"
         if (value.isInfinite()) return if (value > 0) "Infinity" else "-Infinity"
-        if (value % 1.0 == 0.0) {
+        val rawStr = if (value % 1.0 == 0.0) {
             if (value >= Long.MAX_VALUE.toDouble() || value <= Long.MIN_VALUE.toDouble()) {
-                return value.toString()
+                value.toString()
+            } else {
+                value.toLong().toString()
             }
-            return value.toLong().toString()
+        } else {
+            String.format(Locale.US, "%.8f", value)
+                .replace(Regex("0+$"), "")
+                .replace(Regex("\\.$"), "")
         }
-        val formatted = String.format(Locale.US, "%.8f", value)
-            .replace(Regex("0+$"), "")
-            .replace(Regex("\\.$"), "")
-        return if (formatted == "-0") "0" else formatted
+        val formatted = if (rawStr == "-0") "0" else rawStr
+        return formatExpressionWithCommas(formatted)
     }
 
     companion object {
@@ -1158,3 +1156,37 @@ enum class ConverterCategory(val label: String, val units: List<ConversionUnit>)
 }
 
 data class ConversionUnit(val name: String, val multiplier: Double)
+
+fun formatExpressionWithCommas(expr: String): String {
+    if (expr.isEmpty()) return ""
+    val regex = Regex("\\b\\d+(\\.\\d+)?\\b")
+    return regex.replace(expr) { matchResult ->
+        val matchedStr = matchResult.value
+        formatSingleNumberWithCommas(matchedStr)
+    }
+}
+
+private fun formatSingleNumberWithCommas(numStr: String): String {
+    if (numStr.isEmpty()) return ""
+    val parts = numStr.split('.')
+    val integerPart = parts[0]
+    val fractionalPart = if (parts.size > 1) "." + parts[1] else ""
+    
+    val formattedInteger = formatIntegerWithCommas(integerPart)
+    return formattedInteger + fractionalPart
+}
+
+private fun formatIntegerWithCommas(integerStr: String): String {
+    if (integerStr.length <= 3) return integerStr
+    val sb = StringBuilder()
+    var count = 0
+    for (i in integerStr.length - 1 downTo 0) {
+        sb.append(integerStr[i])
+        count++
+        if (count == 3 && i > 0) {
+            sb.append(',')
+            count = 0
+        }
+    }
+    return sb.reverse().toString()
+}
