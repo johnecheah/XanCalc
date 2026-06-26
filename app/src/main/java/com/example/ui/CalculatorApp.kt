@@ -418,7 +418,7 @@ fun CalculatorApp(viewModel: CalculatorViewModel) {
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "Version V1.0",
+                            text = "Version V1.1",
                             fontSize = 12.sp,
                             color = LightChalk.copy(alpha = 0.5f)
                         )
