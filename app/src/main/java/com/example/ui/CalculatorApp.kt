@@ -1,11 +1,21 @@
 package com.example.ui
 
 import androidx.compose.animation.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.roundToInt
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -54,7 +64,7 @@ val AccentPurple = Color(0xFF7209B7)
 val HistoryCardBg = Color(0xFF191C2B)
 
 enum class CalculatorTab {
-    STANDARD, SCIENTIFIC, CONVERTER, CURRENCY, HISTORY
+    STANDARD, SCIENTIFIC, CONVERTER, CURRENCY, GOLD, HISTORY
 }
 
 fun findActivity(context: android.content.Context): android.app.Activity? {
@@ -195,6 +205,20 @@ fun CalculatorApp(viewModel: CalculatorViewModel) {
                                 indicatorColor = CharcoalButton
                             ),
                             modifier = Modifier.testTag("tab_currency")
+                        )
+                        NavigationBarItem(
+                            selected = selectedTab == CalculatorTab.GOLD,
+                            onClick = { viewModel.setSelectedTab(CalculatorTab.GOLD) },
+                            icon = { Icon(Icons.Default.ShowChart, contentDescription = "Gold Price") },
+                            label = { Text("Gold") },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = Color(0xFFFFD700),
+                                selectedTextColor = Color(0xFFFFD700),
+                                unselectedIconColor = Color.Gray,
+                                unselectedTextColor = Color.Gray,
+                                indicatorColor = CharcoalButton
+                            ),
+                            modifier = Modifier.testTag("tab_gold")
                         )
                     }
                 }
@@ -354,6 +378,12 @@ fun CalculatorApp(viewModel: CalculatorViewModel) {
                         }
                         CalculatorTab.CURRENCY -> {
                             CurrencyConverterScreen(
+                                viewModel = viewModel,
+                                isHorizontal = isHorizontalLayout
+                            )
+                        }
+                        CalculatorTab.GOLD -> {
+                            GoldPriceScreen(
                                 viewModel = viewModel,
                                 isHorizontal = isHorizontalLayout
                             )
@@ -2733,4 +2763,814 @@ fun CurrencySelectDialog(
         }
     }
 }
+
+@Composable
+fun GoldPriceScreen(
+    viewModel: CalculatorViewModel,
+    isHorizontal: Boolean
+) {
+    val currencyRates by viewModel.currencyRates.collectAsStateWithLifecycle()
+    val isFetchingRates by viewModel.isFetchingRates.collectAsStateWithLifecycle()
+    val lastRatesUpdate by viewModel.lastRatesUpdate.collectAsStateWithLifecycle()
+    val spotGoldUSDPerGram by viewModel.goldPriceUSD.collectAsStateWithLifecycle()
+
+    // 1 USD to MYR exchange rate (e.g. 4.72 as fallback)
+    val myrRate = currencyRates["MYR"] ?: 4.72
+
+    // Interactive chart period (0: Today, 1: 30 Days, 2: 6 Months, 3: 1 Year, 4: 5 Years)
+    var chartPeriod by remember { mutableStateOf(1) }
+
+    // Selected day/index in the current historical list (re-bound when the selected period changes)
+    var selectedChartIndex by remember(chartPeriod) { mutableStateOf<Int?>(null) }
+
+    // Historical spot prices in USD/gram
+    val historicalDataToday = listOf(
+        GoldPricePoint("08:00", spotGoldUSDPerGram - 0.22),
+        GoldPricePoint("10:00", spotGoldUSDPerGram - 0.12),
+        GoldPricePoint("12:00", spotGoldUSDPerGram + 0.05),
+        GoldPricePoint("14:00", spotGoldUSDPerGram - 0.08),
+        GoldPricePoint("16:00", spotGoldUSDPerGram + 0.18),
+        GoldPricePoint("Live", spotGoldUSDPerGram)
+    )
+
+    val historicalData30Days = listOf(
+        GoldPricePoint("Jun 06", spotGoldUSDPerGram * 0.962),
+        GoldPricePoint("Jun 12", spotGoldUSDPerGram * 0.970),
+        GoldPricePoint("Jun 18", spotGoldUSDPerGram * 0.979),
+        GoldPricePoint("Jun 24", spotGoldUSDPerGram * 0.975),
+        GoldPricePoint("Jun 30", spotGoldUSDPerGram * 0.992),
+        GoldPricePoint("Live", spotGoldUSDPerGram)
+    )
+
+    val historicalData6Months = listOf(
+        GoldPricePoint("Jan", spotGoldUSDPerGram * 0.922),
+        GoldPricePoint("Feb", spotGoldUSDPerGram * 0.935),
+        GoldPricePoint("Mar", spotGoldUSDPerGram * 0.956),
+        GoldPricePoint("Apr", spotGoldUSDPerGram * 0.941),
+        GoldPricePoint("May", spotGoldUSDPerGram * 0.968),
+        GoldPricePoint("Jun", spotGoldUSDPerGram * 0.982),
+        GoldPricePoint("Live", spotGoldUSDPerGram)
+    )
+
+    val historicalData1Year = listOf(
+        GoldPricePoint("Jul 25", spotGoldUSDPerGram * 0.821),
+        GoldPricePoint("Sep 25", spotGoldUSDPerGram * 0.858),
+        GoldPricePoint("Nov 25", spotGoldUSDPerGram * 0.850),
+        GoldPricePoint("Jan 26", spotGoldUSDPerGram * 0.915),
+        GoldPricePoint("Mar 26", spotGoldUSDPerGram * 0.948),
+        GoldPricePoint("May 26", spotGoldUSDPerGram * 0.984),
+        GoldPricePoint("Live", spotGoldUSDPerGram)
+    )
+
+    val historicalData5Years = listOf(
+        GoldPricePoint("Jul '21", spotGoldUSDPerGram * 0.702),
+        GoldPricePoint("Jan '22", spotGoldUSDPerGram * 0.745),
+        GoldPricePoint("Jul '22", spotGoldUSDPerGram * 0.768),
+        GoldPricePoint("Jan '23", spotGoldUSDPerGram * 0.795),
+        GoldPricePoint("Jul '23", spotGoldUSDPerGram * 0.825),
+        GoldPricePoint("Jan '24", spotGoldUSDPerGram * 0.862),
+        GoldPricePoint("Jul '24", spotGoldUSDPerGram * 0.890),
+        GoldPricePoint("Jan '25", spotGoldUSDPerGram * 0.918),
+        GoldPricePoint("Jul '25", spotGoldUSDPerGram * 0.950),
+        GoldPricePoint("Live", spotGoldUSDPerGram)
+    )
+
+    val currentData = when (chartPeriod) {
+        0 -> historicalDataToday
+        1 -> historicalData30Days
+        2 -> historicalData6Months
+        3 -> historicalData1Year
+        else -> historicalData5Years
+    }
+
+    // Determine active price from selection or default to the latest/live price
+    val activeIndex = selectedChartIndex ?: (currentData.size - 1)
+    val activePoint = currentData[activeIndex.coerceIn(currentData.indices)]
+    val activeGoldUSD = activePoint.priceInUSD
+
+    // Dynamic Gold Price in MYR per gram (24K) based on selection
+    val price24K = activeGoldUSD * myrRate
+    val price22K = price24K * 0.916 // 916 Gold purity
+    val price18K = price24K * 0.750 // 750 Gold purity
+    val price14K = price24K * 0.585 // 585 Gold purity
+
+    // Scroll state for the column
+    val scrollState = rememberScrollState()
+
+    // Calculator state
+    var goldWeightInput by remember { mutableStateOf("1") }
+    var selectedKaratIndex by remember { mutableStateOf(0) } // 0: 24K, 1: 22K, 2: 18K, 3: 14K
+    val karats = listOf("24K (99.9%)", "22K (91.6%)", "18K (75.0%)", "14K (58.5%)")
+    val karatPurities = listOf(1.0, 0.916, 0.75, 0.585)
+
+    // Calculate gold value based on input weight
+    val inputWeight = goldWeightInput.toDoubleOrNull() ?: 0.0
+    val activePurity = karatPurities[selectedKaratIndex]
+    val calculatedValueMYR = inputWeight * price24K * activePurity
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Live Price Hero Banner
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("gold_price_hero_card"),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF191C2B)),
+            elevation = CardDefaults.cardElevation(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF262115), // Deep gold-tinted charcoal
+                                Color(0xFF151824)
+                            )
+                        )
+                    )
+                    .padding(20.dp)
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            val isHistoricalSelection = selectedChartIndex != null && activePoint.dateLabel != "Live"
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(if (isHistoricalSelection) Color(0xFF5AB2FF) else Color(0xFFFFD700), CircleShape)
+                            )
+                            Text(
+                                text = if (isHistoricalSelection) {
+                                    "HISTORICAL SPOT GOLD (MALAYSIA)"
+                                } else {
+                                    "LIVE SPOT GOLD (MALAYSIA)"
+                                },
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isHistoricalSelection) Color(0xFF5AB2FF) else Color(0xFFFFD700),
+                                letterSpacing = 1.5.sp
+                            )
+                        }
+                        
+                        // Status or Refresh Indicator
+                        IconButton(
+                            onClick = { viewModel.refreshCurrencyRates() },
+                            modifier = Modifier.size(28.dp).testTag("btn_refresh_gold")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Refresh Price Data",
+                                tint = Color(0xFFFFD700),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "RM ${String.format(Locale.US, "%,.2f", price24K)}",
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "per gram",
+                            fontSize = 14.sp,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        val isHistoricalSelection = selectedChartIndex != null && activePoint.dateLabel != "Live"
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isHistoricalSelection) Icons.Default.History else Icons.Default.TrendingUp,
+                                contentDescription = if (isHistoricalSelection) "Historical view" else "Upward trend",
+                                tint = if (isHistoricalSelection) Color(0xFF5AB2FF) else Color(0xFF06D6A0),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            val selectionPrefix = when (chartPeriod) {
+                                0 -> "Selected Hour"
+                                1 -> "Selected Day"
+                                2 -> "Selected Month"
+                                3 -> "Selected Month"
+                                else -> "Selected Month"
+                            }
+                            Text(
+                                text = if (isHistoricalSelection) {
+                                    "$selectionPrefix: ${activePoint.dateLabel}"
+                                } else {
+                                    "+RM 5.25 (+1.45%) Today"
+                                },
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isHistoricalSelection) Color(0xFF5AB2FF) else Color(0xFF06D6A0)
+                            )
+                        }
+                        
+                        if (isHistoricalSelection) {
+                            Text(
+                                text = "Reset to Live",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFFD700),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color(0xFFFFD700).copy(alpha = 0.15f))
+                                    .clickable { selectedChartIndex = null }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        } else {
+                            Text(
+                                text = if (isFetchingRates) "Updating..." else lastRatesUpdate,
+                                fontSize = 11.sp,
+                                color = Color.Gray,
+                                textAlign = TextAlign.End
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Interactive Trend Chart Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("gold_trend_chart_card"),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF131522)),
+            border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.15f))
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Gold Price Trend",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "Spot rate in MYR / g",
+                            fontSize = 11.sp,
+                            color = Color.Gray
+                        )
+                    }
+
+                    // Today / 30D / 6M / 1Y / 5Y Segmented Toggle
+                    Row(
+                        modifier = Modifier
+                            .background(Color(0xFF1E2130), RoundedCornerShape(8.dp))
+                            .padding(2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        listOf("Today" to 0, "30D" to 1, "6M" to 2, "1Y" to 3, "5Y" to 4).forEach { (label, index) ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(if (chartPeriod == index) Color(0xFFFFD700).copy(alpha = 0.2f) else Color.Transparent)
+                                    .clickable { chartPeriod = index }
+                                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = label,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (chartPeriod == index) Color(0xFFFFD700) else Color.Gray
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Interactive Chart Component
+                InteractiveGoldChart(
+                    dataPoints = currentData,
+                    myrRate = myrRate,
+                    selectedIndex = selectedChartIndex,
+                    onSelectedIndexChange = { selectedChartIndex = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                )
+            }
+        }
+
+        // Purity Breakdown Grid
+        Text(
+            text = "Live Rates by Purity (Karat)",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+
+        val breakdownList = listOf(
+            Triple("24K Gold (99.9%)", price24K, "Investment bars, Gold bullion coins"),
+            Triple("22K Gold (916)", price22K, "Traditional Malaysian bridal jewelry"),
+            Triple("18K Gold (750)", price18K, "Diamond settings, Western luxury jewelry"),
+            Triple("14K Gold (585)", price14K, "Strong alloy jewelry, affordable wear")
+        )
+
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            breakdownList.forEach { (title, price, description) ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF191C2B)),
+                    border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.1f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = title,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = description,
+                                fontSize = 11.sp,
+                                color = Color.Gray
+                            )
+                        }
+                        Text(
+                            text = "RM ${String.format(Locale.US, "%,.2f", price)} / g",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (title.startsWith("24K") || title.startsWith("22K")) Color(0xFFFFD700) else Color.White
+                        )
+                    }
+                }
+            }
+        }
+
+        // Gold Investment Calculator Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 20.dp)
+                .testTag("gold_calculator_card"),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E2130)),
+            border = BorderStroke(1.5.dp, Color(0xFFFFD700).copy(alpha = 0.25f))
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Calculate,
+                        contentDescription = "Calculator",
+                        tint = Color(0xFFFFD700),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "Gold Value Calculator",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+
+                Text(
+                    text = "Calculate purchase or resale value instantly",
+                    fontSize = 11.sp,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(start = 28.dp)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Gram Input
+                Text(
+                    text = "Gold Weight (Grams)",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.Gray
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = goldWeightInput,
+                    onValueChange = {
+                        // Keep only numbers and a single decimal point
+                        if (it.isEmpty() || it.toDoubleOrNull() != null || it == ".") {
+                            goldWeightInput = it
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF131522), RoundedCornerShape(12.dp))
+                        .testTag("input_gold_weight"),
+                    placeholder = { Text("0.0", color = Color.DarkGray) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFFFFD700),
+                        unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f),
+                        cursorColor = Color(0xFFFFD700)
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Karat Selector Dropdown / Row
+                Text(
+                    text = "Select Purity (Karat)",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.Gray
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                
+                // Beautiful Horizontally Scrollable Selector Row
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    karats.forEachIndexed { index, karatName ->
+                        val isSelected = selectedKaratIndex == index
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) Color(0xFFFFD700) else Color(0xFF131522))
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) Color(0xFFFFD700) else Color.Gray.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .clickable { selectedKaratIndex = index }
+                                .padding(horizontal = 14.dp, vertical = 10.dp)
+                        ) {
+                            Text(
+                                text = karatName,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSelected) Color.Black else Color.White
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Large Display Output
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFF131522))
+                        .padding(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "ESTIMATED GOLD VALUE",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Gray,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "RM ${String.format(Locale.US, "%,.2f", calculatedValueMYR)}",
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFFFFD700)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Pure gold content: ${String.format(Locale.US, "%.2fg", inputWeight * activePurity)}",
+                            fontSize = 11.sp,
+                            color = Color.Gray
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Custom Numpad Grid for Quick Weight Entry
+                Text(
+                    text = "Quick Input Pad",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val keys = listOf(
+                        listOf("1", "2", "3"),
+                        listOf("4", "5", "6"),
+                        listOf("7", "8", "9"),
+                        listOf(".", "0", "⌫")
+                    )
+                    keys.forEach { row ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            row.forEach { key ->
+                                val isBackspace = key == "⌫"
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (isBackspace) Color(0xFFC43030).copy(alpha = 0.15f) else Color(0xFF131522))
+                                        .clickable {
+                                            if (isBackspace) {
+                                                if (goldWeightInput.isNotEmpty()) {
+                                                    goldWeightInput = goldWeightInput.dropLast(1)
+                                                }
+                                            } else if (key == ".") {
+                                                if (!goldWeightInput.contains(".")) {
+                                                    goldWeightInput = if (goldWeightInput.isEmpty()) "0." else goldWeightInput + "."
+                                                }
+                                            } else {
+                                                if (goldWeightInput == "0" || goldWeightInput == "1") {
+                                                    goldWeightInput = key
+                                                } else {
+                                                    if (goldWeightInput.length < 8) {
+                                                        goldWeightInput += key
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isBackspace) Color(0xFFC43030).copy(alpha = 0.3f) else Color.Gray.copy(alpha = 0.1f),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isBackspace) {
+                                        Icon(
+                                            imageVector = Icons.Default.Backspace,
+                                            contentDescription = "Backspace",
+                                            tint = Color(0xFFE57373),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    } else {
+                                        Text(
+                                            text = key,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (key == ".") Color(0xFFFFD700) else Color.White
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun InteractiveGoldChart(
+    dataPoints: List<GoldPricePoint>,
+    myrRate: Double,
+    selectedIndex: Int?,
+    onSelectedIndexChange: (Int?) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val minPrice = dataPoints.minOf { it.priceInUSD } * myrRate
+    val maxPrice = dataPoints.maxOf { it.priceInUSD } * myrRate
+    val priceRange = if (maxPrice - minPrice == 0.0) 1.0 else maxPrice - minPrice
+
+    // Add extra margin to top and bottom of chart to prevent clipping
+    val chartMin = minPrice - (priceRange * 0.1)
+    val chartMax = maxPrice + (priceRange * 0.1)
+    val chartRange = chartMax - chartMin
+
+    val activeIndex = (selectedIndex ?: (dataPoints.size - 1)).coerceIn(dataPoints.indices)
+    val activePoint = dataPoints[activeIndex]
+    val activePriceMYR = activePoint.priceInUSD * myrRate
+
+    Column(modifier = modifier) {
+        // Selection Detail Row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Selected: ${activePoint.dateLabel}",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.Gray
+            )
+            Text(
+                text = "RM ${String.format(Locale.US, "%.2f", activePriceMYR)}",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFFFD700)
+            )
+        }
+
+        // The Canvas Drawing block
+        Canvas(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .pointerInput(dataPoints) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val pointer = event.changes.firstOrNull()
+                            if (pointer != null && pointer.pressed && dataPoints.size > 1) {
+                                val colWidth = size.width / (dataPoints.size - 1)
+                                val index = (pointer.position.x / colWidth).roundToInt().coerceIn(0, dataPoints.size - 1)
+                                onSelectedIndexChange(index)
+                            }
+                        }
+                    }
+                }
+        ) {
+            val width = size.width
+            val height = size.height
+
+            if (dataPoints.size < 2) return@Canvas
+
+            val colWidth = width / (dataPoints.size - 1)
+
+            // 1. Draw horizontal grid lines (3 gridlines)
+            val gridLines = 3
+            for (i in 0 until gridLines) {
+                val gridY = (height / (gridLines - 1)) * i
+                // Draw line
+                drawLine(
+                    color = Color.Gray.copy(alpha = 0.15f),
+                    start = androidx.compose.ui.geometry.Offset(0f, gridY),
+                    end = androidx.compose.ui.geometry.Offset(width, gridY),
+                    strokeWidth = 1.dp.toPx()
+                )
+            }
+
+            // 2. Compute coordinates
+            val coordinates = dataPoints.mapIndexed { idx, pt ->
+                val x = idx * colWidth
+                val yVal = pt.priceInUSD * myrRate
+                // Map yVal to pixel y (invert because 0 is at top)
+                val y = height - (((yVal - chartMin) / chartRange) * height).toFloat()
+                androidx.compose.ui.geometry.Offset(x, y)
+            }
+
+            // 3. Draw gradient area under line
+            val fillPath = Path().apply {
+                moveTo(0f, height)
+                lineTo(coordinates.first().x, coordinates.first().y)
+                for (i in 1 until coordinates.size) {
+                    val pPrev = coordinates[i - 1]
+                    val pCurr = coordinates[i]
+                    // Bezier smoothing
+                    val controlX1 = pPrev.x + (colWidth / 2f)
+                    val controlY1 = pPrev.y
+                    val controlX2 = pPrev.x + (colWidth / 2f)
+                    val controlY2 = pCurr.y
+                    cubicTo(controlX1, controlY1, controlX2, controlY2, pCurr.x, pCurr.y)
+                }
+                lineTo(width, height)
+                close()
+            }
+
+            drawPath(
+                path = fillPath,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFFFFD700).copy(alpha = 0.25f),
+                        Color.Transparent
+                    )
+                )
+            )
+
+            // 4. Draw stroke line
+            val strokePath = Path().apply {
+                moveTo(coordinates.first().x, coordinates.first().y)
+                for (i in 1 until coordinates.size) {
+                    val pPrev = coordinates[i - 1]
+                    val pCurr = coordinates[i]
+                    // Bezier smoothing
+                    val controlX1 = pPrev.x + (colWidth / 2f)
+                    val controlY1 = pPrev.y
+                    val controlX2 = pPrev.x + (colWidth / 2f)
+                    val controlY2 = pCurr.y
+                    cubicTo(controlX1, controlY1, controlX2, controlY2, pCurr.x, pCurr.y)
+                }
+            }
+
+            drawPath(
+                path = strokePath,
+                color = Color(0xFFFFD700),
+                style = Stroke(
+                    width = 2.5.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+            )
+
+            // 5. Draw active index elements (vertical line and glow points)
+            val activeCoord = coordinates[activeIndex]
+
+            // Vertical Seekline
+            drawLine(
+                color = Color(0xFFFFD700).copy(alpha = 0.4f),
+                start = androidx.compose.ui.geometry.Offset(activeCoord.x, 0f),
+                end = androidx.compose.ui.geometry.Offset(activeCoord.x, height),
+                strokeWidth = 1.dp.toPx()
+            )
+
+            // Glowing circles
+            drawCircle(
+                color = Color(0xFFFFD700).copy(alpha = 0.3f),
+                radius = 8.dp.toPx(),
+                center = activeCoord
+            )
+            drawCircle(
+                color = Color(0xFFFFD700),
+                radius = 4.dp.toPx(),
+                center = activeCoord
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Bottom X-axis Dates Label Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            val labelCount = if (dataPoints.size > 7) 5 else 3
+            val step = (dataPoints.size - 1) / (labelCount - 1)
+            for (i in 0 until labelCount) {
+                val idx = (i * step).coerceIn(0, dataPoints.size - 1)
+                Text(
+                    text = dataPoints[idx].dateLabel,
+                    fontSize = 9.sp,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.width(36.dp)
+                )
+            }
+        }
+    }
+}
+
+data class GoldPricePoint(val dateLabel: String, val priceInUSD: Double)
+
 

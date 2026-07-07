@@ -75,7 +75,7 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
         lastOperand = null
         isRepeatFunctionActive = false
         performConversion()
-        if (tab == CalculatorTab.CURRENCY) {
+        if (tab == CalculatorTab.CURRENCY || tab == CalculatorTab.GOLD) {
             refreshCurrencyRates()
         }
     }
@@ -95,6 +95,9 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
                     if (key != "+" && key != "-" && key != "×" && key != "÷" && key != "=") {
                         onCurrencyKeyPress(key)
                     }
+                }
+                CalculatorTab.GOLD -> {
+                    // Handled inside the Gold screen UI
                 }
                 CalculatorTab.HISTORY -> {
                     // Ignore keypad keys in history
@@ -171,6 +174,9 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
 
     private val _lastRatesUpdate = MutableStateFlow("Tap refresh to load live rates")
     val lastRatesUpdate: StateFlow<String> = _lastRatesUpdate.asStateFlow()
+
+    private val _goldPriceUSD = MutableStateFlow(78.15)
+    val goldPriceUSD: StateFlow<Double> = _goldPriceUSD.asStateFlow()
 
     private val _currencyRates = MutableStateFlow(
         ALL_CURRENCIES.keys.associateWith { code ->
@@ -836,9 +842,62 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
             } catch (e: Throwable) {
                 _lastRatesUpdate.value = "Local fallback rates active"
             } finally {
+                fetchSpotGoldPrice()
                 _isFetchingRates.value = false
                 performCurrencyConversion()
             }
+        }
+    }
+
+    private fun fetchSpotGoldPrice() {
+        try {
+            // Try api.gold-api.com first
+            val url = java.net.URL("https://api.gold-api.com/price/XAU")
+            val connection = url.openConnection() as java.net.HttpURLConnection
+            connection.connectTimeout = 4000
+            connection.readTimeout = 4000
+            connection.requestMethod = "GET"
+            if (connection.responseCode == 200) {
+                val text = connection.inputStream.bufferedReader().use { it.readText() }
+                // Parse "price" : 2350.5 or "price":75.60
+                val priceRegex = """"price"\s*:\s*([0-9.]+)""".toRegex()
+                val match = priceRegex.find(text)
+                val priceValue = match?.groupValues?.get(1)?.toDoubleOrNull()
+                if (priceValue != null && priceValue > 0.0) {
+                    if (priceValue > 400.0) {
+                        // Per troy ounce, convert to per gram
+                        _goldPriceUSD.value = priceValue / 31.1034768
+                    } else {
+                        // Per gram already
+                        _goldPriceUSD.value = priceValue
+                    }
+                    return
+                }
+            }
+        } catch (e: Throwable) {
+            // Ignore and fall back to CoinGecko
+        }
+
+        try {
+            // Try CoinGecko PAX Gold as a highly reliable secondary keyless source
+            val url = java.net.URL("https://api.coingecko.com/api/v3/simple/price?ids=pax-gold&vs_currencies=usd")
+            val connection = url.openConnection() as java.net.HttpURLConnection
+            connection.connectTimeout = 4000
+            connection.readTimeout = 4000
+            connection.requestMethod = "GET"
+            if (connection.responseCode == 200) {
+                val text = connection.inputStream.bufferedReader().use { it.readText() }
+                val priceRegex = """"usd"\s*:\s*([0-9.]+)""".toRegex()
+                val match = priceRegex.find(text)
+                val priceValue = match?.groupValues?.get(1)?.toDoubleOrNull()
+                if (priceValue != null && priceValue > 0.0) {
+                    // PAXG tracks physical gold price per troy ounce. Convert to per gram.
+                    _goldPriceUSD.value = priceValue / 31.1034768
+                    return
+                }
+            }
+        } catch (e: Throwable) {
+            // Fall back to default
         }
     }
 
