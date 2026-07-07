@@ -178,6 +178,17 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
     private val _goldPriceUSD = MutableStateFlow(78.15)
     val goldPriceUSD: StateFlow<Double> = _goldPriceUSD.asStateFlow()
 
+    // Real historical gold prices (USD per troy ounce), fetched from FreeGoldAPI.com.
+    // Source blends Yahoo Finance daily futures (2025-present) with World Bank monthly
+    // data (1960-2024) - no API key needed, no fabricated numbers.
+    data class GoldHistoryPoint(val date: String, val priceUSDPerOz: Double)
+
+    private val _goldHistory = MutableStateFlow<List<GoldHistoryPoint>>(emptyList())
+    val goldHistory: StateFlow<List<GoldHistoryPoint>> = _goldHistory.asStateFlow()
+
+    private val _goldHistoryStatus = MutableStateFlow("Not loaded yet")
+    val goldHistoryStatus: StateFlow<String> = _goldHistoryStatus.asStateFlow()
+
     private val _currencyRates = MutableStateFlow(
         ALL_CURRENCIES.keys.associateWith { code ->
             when (code) {
@@ -843,9 +854,56 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
                 _lastRatesUpdate.value = "Local fallback rates active"
             } finally {
                 fetchSpotGoldPrice()
+                fetchGoldHistory()
                 _isFetchingRates.value = false
                 performCurrencyConversion()
             }
+        }
+    }
+
+    // Fetches REAL historical gold prices (no key required, no fabricated multipliers).
+    // Source: https://freegoldapi.com - blends Yahoo Finance daily gold futures (GC=F,
+    // 2025-present) with World Bank monthly data (1960-2024) and MeasuringWorth annual
+    // data for older years. Every record is attributed to a real public source.
+    private fun fetchGoldHistory() {
+        // Avoid re-downloading the (large) full dataset if we already have it this session.
+        if (_goldHistory.value.isNotEmpty()) return
+
+        try {
+            val url = java.net.URL("https://freegoldapi.com/data/latest.json")
+            val connection = url.openConnection() as java.net.HttpURLConnection
+            connection.connectTimeout = 6000
+            connection.readTimeout = 8000
+            connection.requestMethod = "GET"
+
+            if (connection.responseCode == 200) {
+                val text = connection.inputStream.bufferedReader().use { it.readText() }
+                val fullArray = org.json.JSONArray(text)
+
+                // Only keep the last ~6 years - plenty for the Today/30D/6M/1Y/5Y views,
+                // and much smaller/faster than parsing all 768 years of data every time.
+                val calendar = java.util.Calendar.getInstance()
+                calendar.add(java.util.Calendar.YEAR, -6)
+                val cutoff = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                    .format(calendar.time)
+
+                val recent = mutableListOf<GoldHistoryPoint>()
+                for (i in 0 until fullArray.length()) {
+                    val obj = fullArray.getJSONObject(i)
+                    val date = obj.optString("date", "")
+                    val price = obj.optDouble("price", -1.0)
+                    if (date >= cutoff && price > 0.0) {
+                        recent.add(GoldHistoryPoint(date, price))
+                    }
+                }
+
+                _goldHistory.value = recent.sortedBy { it.date }
+                _goldHistoryStatus.value = "Real historical data loaded (${recent.size} records)"
+            } else {
+                _goldHistoryStatus.value = "Could not load historical data (HTTP ${connection.responseCode})"
+            }
+        } catch (e: Throwable) {
+            _goldHistoryStatus.value = "Could not load historical data - showing live price only"
         }
     }
 

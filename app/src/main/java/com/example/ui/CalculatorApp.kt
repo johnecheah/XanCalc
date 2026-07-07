@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.HistoryEntity
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -2773,6 +2774,8 @@ fun GoldPriceScreen(
     val isFetchingRates by viewModel.isFetchingRates.collectAsStateWithLifecycle()
     val lastRatesUpdate by viewModel.lastRatesUpdate.collectAsStateWithLifecycle()
     val spotGoldUSDPerGram by viewModel.goldPriceUSD.collectAsStateWithLifecycle()
+    val goldHistory by viewModel.goldHistory.collectAsStateWithLifecycle()
+    val goldHistoryStatus by viewModel.goldHistoryStatus.collectAsStateWithLifecycle()
 
     // 1 USD to MYR exchange rate (e.g. 4.72 as fallback)
     val myrRate = currencyRates["MYR"] ?: 4.72
@@ -2783,57 +2786,19 @@ fun GoldPriceScreen(
     // Selected day/index in the current historical list (re-bound when the selected period changes)
     var selectedChartIndex by remember(chartPeriod) { mutableStateOf<Int?>(null) }
 
-    // Historical spot prices in USD/gram
-    val historicalDataToday = listOf(
-        GoldPricePoint("08:00", spotGoldUSDPerGram - 0.22),
-        GoldPricePoint("10:00", spotGoldUSDPerGram - 0.12),
-        GoldPricePoint("12:00", spotGoldUSDPerGram + 0.05),
-        GoldPricePoint("14:00", spotGoldUSDPerGram - 0.08),
-        GoldPricePoint("16:00", spotGoldUSDPerGram + 0.18),
-        GoldPricePoint("Live", spotGoldUSDPerGram)
-    )
+    // Troy ounce to gram conversion, used to turn recorded USD/oz history into USD/gram
+    val ozToGram = 31.1034768
 
-    val historicalData30Days = listOf(
-        GoldPricePoint("Jun 06", spotGoldUSDPerGram * 0.962),
-        GoldPricePoint("Jun 12", spotGoldUSDPerGram * 0.970),
-        GoldPricePoint("Jun 18", spotGoldUSDPerGram * 0.979),
-        GoldPricePoint("Jun 24", spotGoldUSDPerGram * 0.975),
-        GoldPricePoint("Jun 30", spotGoldUSDPerGram * 0.992),
-        GoldPricePoint("Live", spotGoldUSDPerGram)
-    )
-
-    val historicalData6Months = listOf(
-        GoldPricePoint("Jan", spotGoldUSDPerGram * 0.922),
-        GoldPricePoint("Feb", spotGoldUSDPerGram * 0.935),
-        GoldPricePoint("Mar", spotGoldUSDPerGram * 0.956),
-        GoldPricePoint("Apr", spotGoldUSDPerGram * 0.941),
-        GoldPricePoint("May", spotGoldUSDPerGram * 0.968),
-        GoldPricePoint("Jun", spotGoldUSDPerGram * 0.982),
-        GoldPricePoint("Live", spotGoldUSDPerGram)
-    )
-
-    val historicalData1Year = listOf(
-        GoldPricePoint("Jul 25", spotGoldUSDPerGram * 0.821),
-        GoldPricePoint("Sep 25", spotGoldUSDPerGram * 0.858),
-        GoldPricePoint("Nov 25", spotGoldUSDPerGram * 0.850),
-        GoldPricePoint("Jan 26", spotGoldUSDPerGram * 0.915),
-        GoldPricePoint("Mar 26", spotGoldUSDPerGram * 0.948),
-        GoldPricePoint("May 26", spotGoldUSDPerGram * 0.984),
-        GoldPricePoint("Live", spotGoldUSDPerGram)
-    )
-
-    val historicalData5Years = listOf(
-        GoldPricePoint("Jul '21", spotGoldUSDPerGram * 0.702),
-        GoldPricePoint("Jan '22", spotGoldUSDPerGram * 0.745),
-        GoldPricePoint("Jul '22", spotGoldUSDPerGram * 0.768),
-        GoldPricePoint("Jan '23", spotGoldUSDPerGram * 0.795),
-        GoldPricePoint("Jul '23", spotGoldUSDPerGram * 0.825),
-        GoldPricePoint("Jan '24", spotGoldUSDPerGram * 0.862),
-        GoldPricePoint("Jul '24", spotGoldUSDPerGram * 0.890),
-        GoldPricePoint("Jan '25", spotGoldUSDPerGram * 0.918),
-        GoldPricePoint("Jul '25", spotGoldUSDPerGram * 0.950),
-        GoldPricePoint("Live", spotGoldUSDPerGram)
-    )
+    // Build each period's chart data from the REAL history fetched from FreeGoldAPI.com
+    // (blend of Yahoo Finance daily futures + World Bank monthly data, all attributed to a
+    // real public source - see CalculatorViewModel.fetchGoldHistory()). No point on this
+    // chart is the live price multiplied by a made-up ratio; every non-"Live" point is an
+    // actual recorded price. If the fetch hasn't completed yet (or failed), the period lists
+    // fall back to just "Live" so nothing fabricated is ever shown.
+    val (historicalDataToday, historicalData30Days, historicalData6Months,
+        historicalData1Year, historicalData5Years) = remember(goldHistory, spotGoldUSDPerGram) {
+        buildGoldChartData(goldHistory, spotGoldUSDPerGram, ozToGram)
+    }
 
     val currentData = when (chartPeriod) {
         0 -> historicalDataToday
@@ -3088,6 +3053,13 @@ fun GoldPriceScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(180.dp)
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Source: FreeGoldAPI.com (Yahoo Finance / World Bank) - $goldHistoryStatus",
+                    fontSize = 9.sp,
+                    color = Color.Gray.copy(alpha = 0.7f)
                 )
             }
         }
@@ -3424,128 +3396,130 @@ fun InteractiveGoldChart(
             )
         }
 
-        // The Canvas Drawing block
-        Canvas(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .pointerInput(dataPoints) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val pointer = event.changes.firstOrNull()
-                            if (pointer != null && pointer.pressed && dataPoints.size > 1) {
-                                val colWidth = size.width / (dataPoints.size - 1)
-                                val index = (pointer.position.x / colWidth).roundToInt().coerceIn(0, dataPoints.size - 1)
-                                onSelectedIndexChange(index)
+        run {
+            // Line + gradient-area chart, used for all periods.
+            Canvas(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .pointerInput(dataPoints) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val pointer = event.changes.firstOrNull()
+                                if (pointer != null && pointer.pressed && dataPoints.size > 1) {
+                                    val colWidth = size.width / (dataPoints.size - 1)
+                                    val index = (pointer.position.x / colWidth).roundToInt().coerceIn(0, dataPoints.size - 1)
+                                    onSelectedIndexChange(index)
+                                }
                             }
                         }
                     }
+            ) {
+                val width = size.width
+                val height = size.height
+
+                if (dataPoints.size < 2) return@Canvas
+
+                val colWidth = width / (dataPoints.size - 1)
+
+                // 1. Draw horizontal grid lines (3 gridlines)
+                val gridLines = 3
+                for (i in 0 until gridLines) {
+                    val gridY = (height / (gridLines - 1)) * i
+                    // Draw line
+                    drawLine(
+                        color = Color.Gray.copy(alpha = 0.15f),
+                        start = androidx.compose.ui.geometry.Offset(0f, gridY),
+                        end = androidx.compose.ui.geometry.Offset(width, gridY),
+                        strokeWidth = 1.dp.toPx()
+                    )
                 }
-        ) {
-            val width = size.width
-            val height = size.height
 
-            if (dataPoints.size < 2) return@Canvas
-
-            val colWidth = width / (dataPoints.size - 1)
-
-            // 1. Draw horizontal grid lines (3 gridlines)
-            val gridLines = 3
-            for (i in 0 until gridLines) {
-                val gridY = (height / (gridLines - 1)) * i
-                // Draw line
-                drawLine(
-                    color = Color.Gray.copy(alpha = 0.15f),
-                    start = androidx.compose.ui.geometry.Offset(0f, gridY),
-                    end = androidx.compose.ui.geometry.Offset(width, gridY),
-                    strokeWidth = 1.dp.toPx()
-                )
-            }
-
-            // 2. Compute coordinates
-            val coordinates = dataPoints.mapIndexed { idx, pt ->
-                val x = idx * colWidth
-                val yVal = pt.priceInUSD * myrRate
-                // Map yVal to pixel y (invert because 0 is at top)
-                val y = height - (((yVal - chartMin) / chartRange) * height).toFloat()
-                androidx.compose.ui.geometry.Offset(x, y)
-            }
-
-            // 3. Draw gradient area under line
-            val fillPath = Path().apply {
-                moveTo(0f, height)
-                lineTo(coordinates.first().x, coordinates.first().y)
-                for (i in 1 until coordinates.size) {
-                    val pPrev = coordinates[i - 1]
-                    val pCurr = coordinates[i]
-                    // Bezier smoothing
-                    val controlX1 = pPrev.x + (colWidth / 2f)
-                    val controlY1 = pPrev.y
-                    val controlX2 = pPrev.x + (colWidth / 2f)
-                    val controlY2 = pCurr.y
-                    cubicTo(controlX1, controlY1, controlX2, controlY2, pCurr.x, pCurr.y)
+                // 2. Compute coordinates
+                val coordinates = dataPoints.mapIndexed { idx, pt ->
+                    val x = idx * colWidth
+                    val yVal = pt.priceInUSD * myrRate
+                    // Map yVal to pixel y (invert because 0 is at top)
+                    val y = height - (((yVal - chartMin) / chartRange) * height).toFloat()
+                    androidx.compose.ui.geometry.Offset(x, y)
                 }
-                lineTo(width, height)
-                close()
-            }
 
-            drawPath(
-                path = fillPath,
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFFFFD700).copy(alpha = 0.25f),
-                        Color.Transparent
+                // 3. Draw gradient area under line
+                val fillPath = Path().apply {
+                    moveTo(0f, height)
+                    lineTo(coordinates.first().x, coordinates.first().y)
+                    for (i in 1 until coordinates.size) {
+                        val pPrev = coordinates[i - 1]
+                        val pCurr = coordinates[i]
+                        // Bezier smoothing
+                        val controlX1 = pPrev.x + (colWidth / 2f)
+                        val controlY1 = pPrev.y
+                        val controlX2 = pPrev.x + (colWidth / 2f)
+                        val controlY2 = pCurr.y
+                        cubicTo(controlX1, controlY1, controlX2, controlY2, pCurr.x, pCurr.y)
+                    }
+                    lineTo(width, height)
+                    close()
+                }
+
+                drawPath(
+                    path = fillPath,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFFFFD700).copy(alpha = 0.25f),
+                            Color.Transparent
+                        )
                     )
                 )
-            )
 
-            // 4. Draw stroke line
-            val strokePath = Path().apply {
-                moveTo(coordinates.first().x, coordinates.first().y)
-                for (i in 1 until coordinates.size) {
-                    val pPrev = coordinates[i - 1]
-                    val pCurr = coordinates[i]
-                    // Bezier smoothing
-                    val controlX1 = pPrev.x + (colWidth / 2f)
-                    val controlY1 = pPrev.y
-                    val controlX2 = pPrev.x + (colWidth / 2f)
-                    val controlY2 = pCurr.y
-                    cubicTo(controlX1, controlY1, controlX2, controlY2, pCurr.x, pCurr.y)
+                // 4. Draw stroke line
+                val strokePath = Path().apply {
+                    moveTo(coordinates.first().x, coordinates.first().y)
+                    for (i in 1 until coordinates.size) {
+                        val pPrev = coordinates[i - 1]
+                        val pCurr = coordinates[i]
+                        // Bezier smoothing
+                        val controlX1 = pPrev.x + (colWidth / 2f)
+                        val controlY1 = pPrev.y
+                        val controlX2 = pPrev.x + (colWidth / 2f)
+                        val controlY2 = pCurr.y
+                        cubicTo(controlX1, controlY1, controlX2, controlY2, pCurr.x, pCurr.y)
+                    }
                 }
-            }
 
-            drawPath(
-                path = strokePath,
-                color = Color(0xFFFFD700),
-                style = Stroke(
-                    width = 2.5.dp.toPx(),
-                    cap = StrokeCap.Round
+                drawPath(
+                    path = strokePath,
+                    color = Color(0xFFFFD700),
+                    style = Stroke(
+                        width = 2.5.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
                 )
-            )
 
-            // 5. Draw active index elements (vertical line and glow points)
-            val activeCoord = coordinates[activeIndex]
+                // 5. Draw active index elements (vertical line and glow points)
+                val activeCoord = coordinates[activeIndex]
 
-            // Vertical Seekline
-            drawLine(
-                color = Color(0xFFFFD700).copy(alpha = 0.4f),
-                start = androidx.compose.ui.geometry.Offset(activeCoord.x, 0f),
-                end = androidx.compose.ui.geometry.Offset(activeCoord.x, height),
-                strokeWidth = 1.dp.toPx()
-            )
+                // Vertical Seekline
+                drawLine(
+                    color = Color(0xFFFFD700).copy(alpha = 0.4f),
+                    start = androidx.compose.ui.geometry.Offset(activeCoord.x, 0f),
+                    end = androidx.compose.ui.geometry.Offset(activeCoord.x, height),
+                    strokeWidth = 1.dp.toPx()
+                )
 
-            // Glowing circles
-            drawCircle(
-                color = Color(0xFFFFD700).copy(alpha = 0.3f),
-                radius = 8.dp.toPx(),
-                center = activeCoord
-            )
-            drawCircle(
-                color = Color(0xFFFFD700),
-                radius = 4.dp.toPx(),
-                center = activeCoord
-            )
+                // Glowing circles
+                drawCircle(
+                    color = Color(0xFFFFD700).copy(alpha = 0.3f),
+                    radius = 8.dp.toPx(),
+                    center = activeCoord
+                )
+                drawCircle(
+                    color = Color(0xFFFFD700),
+                    radius = 4.dp.toPx(),
+                    center = activeCoord
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(6.dp))
@@ -3555,8 +3529,12 @@ fun InteractiveGoldChart(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            val labelCount = if (dataPoints.size > 7) 5 else 3
-            val step = (dataPoints.size - 1) / (labelCount - 1)
+            val labelCount = when {
+                dataPoints.size > 7 -> 5
+                dataPoints.size > 1 -> dataPoints.size
+                else -> 1
+            }
+            val step = if (labelCount > 1) (dataPoints.size - 1) / (labelCount - 1) else 1
             for (i in 0 until labelCount) {
                 val idx = (i * step).coerceIn(0, dataPoints.size - 1)
                 Text(
@@ -3572,5 +3550,68 @@ fun InteractiveGoldChart(
 }
 
 data class GoldPricePoint(val dateLabel: String, val priceInUSD: Double)
+
+/**
+ * Builds the Today/30D/6M/1Y/5Y chart series purely from REAL fetched gold history
+ * (CalculatorViewModel.GoldHistoryPoint, sourced from FreeGoldAPI.com - Yahoo Finance +
+ * World Bank data) plus the live spot price for the final "Live" point.
+ *
+ * No point here is ever the live price multiplied by a made-up ratio. If [history] hasn't
+ * loaded yet (or the fetch failed), every period just falls back to a single "Live" point
+ * rather than showing fabricated numbers.
+ */
+fun buildGoldChartData(
+    history: List<CalculatorViewModel.GoldHistoryPoint>,
+    spotGoldUSDPerGram: Double,
+    ozToGram: Double
+): List<List<GoldPricePoint>> {
+    val liveOnly = listOf(GoldPricePoint("Live", spotGoldUSDPerGram))
+    if (history.isEmpty()) {
+        return List(5) { liveOnly }
+    }
+
+    val isoFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+
+    fun cutoffDate(field: Int, amount: Int): String {
+        val cal = Calendar.getInstance()
+        cal.add(field, -amount)
+        return isoFormat.format(cal.time)
+    }
+
+    fun shortLabel(iso: String, pattern: String): String {
+        return try {
+            val parsed = isoFormat.parse(iso)
+            if (parsed != null) SimpleDateFormat(pattern, Locale.US).format(parsed) else iso
+        } catch (e: Throwable) {
+            iso
+        }
+    }
+
+    fun <T> sampleEvenly(list: List<T>, count: Int): List<T> {
+        if (list.size <= count) return list
+        val step = (list.size - 1).toDouble() / (count - 1)
+        return (0 until count).map { i -> list[(i * step).roundToInt().coerceIn(0, list.size - 1)] }
+    }
+
+    fun buildSeries(cutoff: String, pattern: String, sampleCount: Int): List<GoldPricePoint> {
+        val filtered = history.filter { it.date >= cutoff }
+        if (filtered.isEmpty()) return liveOnly
+        val sampled = sampleEvenly(filtered, sampleCount)
+        return sampled.map { GoldPricePoint(shortLabel(it.date, pattern), it.priceUSDPerOz / ozToGram) } + liveOnly
+    }
+
+    // Today: the most recent real record (usually yesterday's close) plus the live price -
+    // an honest 2-point "change since last close" line, no fabricated intraday jitter.
+    val today = history.lastOrNull()?.let {
+        listOf(GoldPricePoint(shortLabel(it.date, "MMM dd"), it.priceUSDPerOz / ozToGram)) + liveOnly
+    } ?: liveOnly
+
+    val thirtyDays = buildSeries(cutoffDate(Calendar.DAY_OF_YEAR, 30), "MMM dd", 6)
+    val sixMonths = buildSeries(cutoffDate(Calendar.MONTH, 6), "MMM", 6)
+    val oneYear = buildSeries(cutoffDate(Calendar.YEAR, 1), "MMM yy", 6)
+    val fiveYears = buildSeries(cutoffDate(Calendar.YEAR, 5), "MMM ''yy", 6)
+
+    return listOf(today, thirtyDays, sixMonths, oneYear, fiveYears)
+}
 
 
