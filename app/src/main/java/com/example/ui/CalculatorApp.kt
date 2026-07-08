@@ -2780,7 +2780,7 @@ fun GoldPriceScreen(
     // 1 USD to MYR exchange rate (e.g. 4.72 as fallback)
     val myrRate = currencyRates["MYR"] ?: 4.72
 
-    // Interactive chart period (0: Today, 1: 6 Months, 2: 1 Year, 3: 5 Years)
+    // Interactive chart period (0: 30D, 1: 6 Months, 2: 1 Year, 3: 5 Years)
     var chartPeriod by remember { mutableStateOf(1) }
 
     // Selected day/index in the current historical list (re-bound when the selected period changes)
@@ -2795,13 +2795,13 @@ fun GoldPriceScreen(
     // chart is the live price multiplied by a made-up ratio; every non-"Live" point is an
     // actual recorded price. If the fetch hasn't completed yet (or failed), the period lists
     // fall back to just "Live" so nothing fabricated is ever shown.
-    val (historicalDataToday, historicalData6Months,
+    val (historicalData30Days, historicalData6Months,
         historicalData1Year, historicalData5Years) = remember(goldHistory, spotGoldUSDPerGram) {
         buildGoldChartData(goldHistory, spotGoldUSDPerGram, ozToGram)
     }
 
     val currentData = when (chartPeriod) {
-        0 -> historicalDataToday
+        0 -> historicalData30Days
         1 -> historicalData6Months
         2 -> historicalData1Year
         else -> historicalData5Years
@@ -2943,7 +2943,7 @@ fun GoldPriceScreen(
                                 modifier = Modifier.size(16.dp)
                             )
                             val selectionPrefix = when (chartPeriod) {
-                                0 -> "Selected Hour"
+                                0 -> "Selected Day"
                                 1 -> "Selected Month"
                                 2 -> "Selected Month"
                                 else -> "Selected Month"
@@ -3021,7 +3021,7 @@ fun GoldPriceScreen(
                             .padding(2.dp),
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        listOf("Today" to 0, "6M" to 1, "1Y" to 2, "5Y" to 3).forEach { (label, index) ->
+                        listOf("30D" to 0, "6M" to 1, "1Y" to 2, "5Y" to 3).forEach { (label, index) ->
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(6.dp))
@@ -3550,13 +3550,11 @@ fun InteractiveGoldChart(
 data class GoldPricePoint(val dateLabel: String, val priceInUSD: Double)
 
 /**
- * Builds the Today/30D/6M/1Y/5Y chart series purely from REAL fetched gold history
- * (CalculatorViewModel.GoldHistoryPoint, sourced from FreeGoldAPI.com - Yahoo Finance +
- * World Bank data) plus the live spot price for the final "Live" point.
- *
- * No point here is ever the live price multiplied by a made-up ratio. If [history] hasn't
- * loaded yet (or the fetch failed), every period just falls back to a single "Live" point
- * rather than showing fabricated numbers.
+ * Updated chart data builder per your specs:
+ * - 30D: 8 points over 30 days
+ * - 6M: 12 points over 6 months
+ * - 1Y: 12 points over 1 year
+ * - 5Y: 10 points over 5 years
  */
 fun buildGoldChartData(
     history: List<CalculatorViewModel.GoldHistoryPoint>,
@@ -3581,34 +3579,32 @@ fun buildGoldChartData(
         } catch (e: Throwable) { iso.takeLast(5) }
     }
 
-    fun <T> sampleEvenly(list: List<T>, count: Int): List<T> {
-        if (list.size <= count) return list
-        val step = (list.size - 1).toDouble() / (count - 1)
-        return (0 until count).map { i -> list[(i * step).roundToInt().coerceIn(0, list.size - 1)] }
+    fun <T> sampleEvenly(list: List<T>, targetCount: Int): List<T> {
+        if (list.size <= targetCount) return list
+        val step = (list.size - 1).toDouble() / (targetCount - 1)
+        return (0 until targetCount).map { i ->
+            list[(i * step).roundToInt().coerceIn(0, list.size - 1)]
+        }
     }
 
-    fun buildSeries(cutoff: String, pattern: String, sampleCount: Int, fallbackDays: Int = 40): List<GoldPricePoint> {
+    fun buildSeries(cutoff: String, pattern: String, targetPoints: Int, fallbackDays: Int = 45): List<GoldPricePoint> {
         var filtered = history.filter { it.date >= cutoff }
         if (filtered.isEmpty()) {
-            // Fallback to nearest available (e.g., 1-2 months) as requested
-            val fallbackCutoff = cutoffDate(Calendar.DAY_OF_YEAR, fallbackDays)
-            filtered = history.filter { it.date >= fallbackCutoff }
+            val fbCutoff = cutoffDate(Calendar.DAY_OF_YEAR, fallbackDays)
+            filtered = history.filter { it.date >= fbCutoff }
         }
         if (filtered.isEmpty()) return liveOnly
 
-        val sampled = sampleEvenly(filtered, sampleCount)
+        val sampled = sampleEvenly(filtered, targetPoints)
         return sampled.map { GoldPricePoint(shortLabel(it.date, pattern), it.priceUSDPerOz / ozToGram) } + liveOnly
     }
 
-    val today = history.lastOrNull()?.let {
-        listOf(GoldPricePoint(shortLabel(it.date, "MMM dd"), it.priceUSDPerOz / ozToGram)) + liveOnly
-    } ?: liveOnly
+    val thirtyDays = buildSeries(cutoffDate(Calendar.DAY_OF_YEAR, 30), "MMM dd", 8)
+    val sixMonths = buildSeries(cutoffDate(Calendar.MONTH, 6), "MMM", 12)      // 12 points / 6M
+    val oneYear = buildSeries(cutoffDate(Calendar.YEAR, 1), "MMM", 12)         // 12 points / 1Y
+    val fiveYears = buildSeries(cutoffDate(Calendar.YEAR, 5), "yy MMM", 10)    // 10 points / 5Y
 
-    val sixMonths = buildSeries(cutoffDate(Calendar.MONTH, 6), "MMM", 8)
-    val oneYear = buildSeries(cutoffDate(Calendar.YEAR, 1), "MMM yy", 8)
-    val fiveYears = buildSeries(cutoffDate(Calendar.YEAR, 5), "MMM ''yy", 8)
-
-    return listOf(today, sixMonths, oneYear, fiveYears)
+    return listOf(thirtyDays, sixMonths, oneYear, fiveYears)
 }
 
 
