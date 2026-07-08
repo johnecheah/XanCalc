@@ -449,7 +449,7 @@ fun CalculatorApp(viewModel: CalculatorViewModel) {
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "Version V1.1",
+                            text = "Version V2.0",
                             fontSize = 12.sp,
                             color = LightChalk.copy(alpha = 0.5f)
                         )
@@ -3043,11 +3043,18 @@ fun GoldPriceScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Interactive Chart Component
+                val chartLabelCount = when (chartPeriod) {
+                    0 -> 8
+                    1 -> 6
+                    2 -> 6
+                    else -> 10
+                }
                 InteractiveGoldChart(
                     dataPoints = currentData,
                     myrRate = myrRate,
                     selectedIndex = selectedChartIndex,
                     onSelectedIndexChange = { selectedChartIndex = it },
+                    labelCount = chartLabelCount,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(180.dp)
@@ -3356,7 +3363,8 @@ fun InteractiveGoldChart(
     myrRate: Double,
     selectedIndex: Int?,
     onSelectedIndexChange: (Int?) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    labelCount: Int = 5
 ) {
     val minPrice = dataPoints.minOf { it.priceInUSD } * myrRate
     val maxPrice = dataPoints.maxOf { it.priceInUSD } * myrRate
@@ -3490,7 +3498,7 @@ fun InteractiveGoldChart(
                     path = strokePath,
                     color = Color(0xFFFFD700),
                     style = Stroke(
-                        width = 2.5.dp.toPx(),
+                        width = 1.8.dp.toPx(),
                         cap = StrokeCap.Round
                     )
                 )
@@ -3527,13 +3535,13 @@ fun InteractiveGoldChart(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            val labelCount = when {
-                dataPoints.size > 7 -> 5
+            val finalLabelCount = when {
+                dataPoints.size > labelCount -> labelCount
                 dataPoints.size > 1 -> dataPoints.size
                 else -> 1
             }
-            val step = if (labelCount > 1) (dataPoints.size - 1) / (labelCount - 1) else 1
-            for (i in 0 until labelCount) {
+            val step = if (finalLabelCount > 1) (dataPoints.size - 1) / (finalLabelCount - 1) else 1
+            for (i in 0 until finalLabelCount) {
                 val idx = (i * step).coerceIn(0, dataPoints.size - 1)
                 Text(
                     text = dataPoints[idx].dateLabel,
@@ -3551,10 +3559,10 @@ data class GoldPricePoint(val dateLabel: String, val priceInUSD: Double)
 
 /**
  * Updated chart data builder per your specs:
- * - 30D: 8 points over 30 days
- * - 6M: 12 points over 6 months
- * - 1Y: 12 points over 1 year
- * - 5Y: 10 points over 5 years
+ * - 30D: ~60 points over 30 days, labeled as "dd" (day of month)
+ * - 6M: 48 points over 6 months, labeled as "MMM" (month name)
+ * - 1Y: 48 points over 1 year, labeled as "MMM" (month name)
+ * - 5Y: 40 points over 5 years, labeled as "yy" (two-digit year)
  */
 fun buildGoldChartData(
     history: List<CalculatorViewModel.GoldHistoryPoint>,
@@ -3599,10 +3607,10 @@ fun buildGoldChartData(
         return sampled.map { GoldPricePoint(shortLabel(it.date, pattern), it.priceUSDPerOz / ozToGram) } + liveOnly
     }
 
-    val thirtyDays = buildSeries(cutoffDate(Calendar.DAY_OF_YEAR, 30), "MMM dd", 8)
-    val sixMonths = buildSeries(cutoffDate(Calendar.MONTH, 6), "MMM", 12)      // 12 points / 6M
-    val oneYear = buildSeries(cutoffDate(Calendar.YEAR, 1), "MMM", 12)         // 12 points / 1Y
-    val fiveYears = buildSeries(cutoffDate(Calendar.YEAR, 5), "yy MMM", 10)    // 10 points / 5Y
+    val thirtyDays = buildSeries(cutoffDate(Calendar.DAY_OF_YEAR, 30), "dd", 119)
+    val sixMonths = buildSeries(cutoffDate(Calendar.MONTH, 6), "MMM", 95)
+    val oneYear = buildSeries(cutoffDate(Calendar.YEAR, 1), "MMM", 95)
+    val fiveYears = buildSeries(cutoffDate(Calendar.YEAR, 5), "MMM yy", 79)
 
     return listOf(thirtyDays, sixMonths, oneYear, fiveYears)
 }
