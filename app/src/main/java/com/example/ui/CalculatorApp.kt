@@ -449,7 +449,7 @@ fun CalculatorApp(viewModel: CalculatorViewModel) {
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "Version V2.0",
+                            text = "Version V2.1",
                             fontSize = 12.sp,
                             color = LightChalk.copy(alpha = 0.5f)
                         )
@@ -2942,15 +2942,10 @@ fun GoldPriceScreen(
                                 tint = if (isHistoricalSelection) Color(0xFF5AB2FF) else Color(0xFF06D6A0),
                                 modifier = Modifier.size(16.dp)
                             )
-                            val selectionPrefix = when (chartPeriod) {
-                                0 -> "Selected Day"
-                                1 -> "Selected Month"
-                                2 -> "Selected Month"
-                                else -> "Selected Month"
-                            }
+                            val selectionPrefix = "Selected day"
                             Text(
                                 text = if (isHistoricalSelection) {
-                                    "$selectionPrefix: ${activePoint.dateLabel}"
+                                    if (activePoint.fullDateLabel == "Live") "Selected: Live" else "$selectionPrefix: ${activePoint.fullDateLabel}"
                                 } else {
                                     "+RM 5.25 (+1.45%) Today"
                                 },
@@ -3044,10 +3039,10 @@ fun GoldPriceScreen(
 
                 // Interactive Chart Component
                 val chartLabelCount = when (chartPeriod) {
-                    0 -> 8
+                    0 -> 6
                     1 -> 6
                     2 -> 6
-                    else -> 10
+                    else -> 5
                 }
                 InteractiveGoldChart(
                     dataPoints = currentData,
@@ -3389,7 +3384,7 @@ fun InteractiveGoldChart(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Selected: ${activePoint.dateLabel}",
+                text = if (activePoint.fullDateLabel == "Live") "Selected: Live" else "Selected day: ${activePoint.fullDateLabel}",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.Gray
@@ -3498,7 +3493,7 @@ fun InteractiveGoldChart(
                     path = strokePath,
                     color = Color(0xFFFFD700),
                     style = Stroke(
-                        width = 1.8.dp.toPx(),
+                        width = 1.2.dp.toPx(),
                         cap = StrokeCap.Round
                     )
                 )
@@ -3540,9 +3535,13 @@ fun InteractiveGoldChart(
                 dataPoints.size > 1 -> dataPoints.size
                 else -> 1
             }
-            val step = if (finalLabelCount > 1) (dataPoints.size - 1) / (finalLabelCount - 1) else 1
             for (i in 0 until finalLabelCount) {
-                val idx = (i * step).coerceIn(0, dataPoints.size - 1)
+                val idx = if (finalLabelCount > 1) {
+                    Math.round(i * (dataPoints.size - 1).toFloat() / (finalLabelCount - 1))
+                        .coerceIn(0, dataPoints.size - 1)
+                } else {
+                    0
+                }
                 Text(
                     text = dataPoints[idx].dateLabel,
                     fontSize = 9.sp,
@@ -3555,21 +3554,25 @@ fun InteractiveGoldChart(
     }
 }
 
-data class GoldPricePoint(val dateLabel: String, val priceInUSD: Double)
+data class GoldPricePoint(
+    val dateLabel: String,
+    val priceInUSD: Double,
+    val fullDateLabel: String = ""
+)
 
 /**
  * Updated chart data builder per your specs:
- * - 30D: ~60 points over 30 days, labeled as "dd" (day of month)
- * - 6M: 48 points over 6 months, labeled as "MMM" (month name)
- * - 1Y: 48 points over 1 year, labeled as "MMM" (month name)
- * - 5Y: 40 points over 5 years, labeled as "yy" (two-digit year)
+ * - 30D: 120 points over 30 days, labeled as "dd" (day of month)
+ * - 6M: 96 points over 6 months, labeled as "MMM" (month name)
+ * - 1Y: 96 points over 1 year, labeled as "MMM" (month name)
+ * - 5Y: 80 points over 5 years, labeled as "yyyy" (four-digit year)
  */
 fun buildGoldChartData(
     history: List<CalculatorViewModel.GoldHistoryPoint>,
     spotGoldUSDPerGram: Double,
     ozToGram: Double
 ): List<List<GoldPricePoint>> {
-    val liveOnly = listOf(GoldPricePoint("Live", spotGoldUSDPerGram))
+    val liveOnly = listOf(GoldPricePoint("Live", spotGoldUSDPerGram, "Live"))
     if (history.isEmpty()) return List(4) { liveOnly }
 
     val isoFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
@@ -3604,13 +3607,18 @@ fun buildGoldChartData(
         if (filtered.isEmpty()) return liveOnly
 
         val sampled = sampleEvenly(filtered, targetPoints)
-        return sampled.map { GoldPricePoint(shortLabel(it.date, pattern), it.priceUSDPerOz / ozToGram) } + liveOnly
+        return sampled.map {
+            val label = shortLabel(it.date, pattern)
+            val fullLabelPattern = "MMM dd, yyyy"
+            val fullLabel = shortLabel(it.date, fullLabelPattern)
+            GoldPricePoint(label, it.priceUSDPerOz / ozToGram, fullLabel)
+        } + liveOnly
     }
 
-    val thirtyDays = buildSeries(cutoffDate(Calendar.DAY_OF_YEAR, 30), "dd", 119)
-    val sixMonths = buildSeries(cutoffDate(Calendar.MONTH, 6), "MMM", 95)
-    val oneYear = buildSeries(cutoffDate(Calendar.YEAR, 1), "MMM", 95)
-    val fiveYears = buildSeries(cutoffDate(Calendar.YEAR, 5), "MMM yy", 79)
+    val thirtyDays = buildSeries(cutoffDate(Calendar.DAY_OF_YEAR, 30), "dd", 29)
+    val sixMonths = buildSeries(cutoffDate(Calendar.MONTH, 6), "MMM yy", 179)
+    val oneYear = buildSeries(cutoffDate(Calendar.YEAR, 1), "MMM yy", 364)
+    val fiveYears = buildSeries(cutoffDate(Calendar.YEAR, 5), "yyyy", 1824)
 
     return listOf(thirtyDays, sixMonths, oneYear, fiveYears)
 }
