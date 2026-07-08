@@ -866,97 +866,104 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
     // 2025-present) with World Bank monthly data (1960-2024) and MeasuringWorth annual
     // data for older years. Every record is attributed to a real public source.
     private fun fetchGoldHistory() {
-        // Avoid re-downloading the (large) full dataset if we already have it this session.
         if (_goldHistory.value.isNotEmpty()) return
 
         try {
-            val url = java.net.URL("https://freegoldapi.com/data/latest.json")
+            val url = java.net.URL("https://query1.finance.yahoo.com/v8/finance/chart/GC=F?range=6y&interval=1d")
             val connection = url.openConnection() as java.net.HttpURLConnection
-            connection.connectTimeout = 6000
-            connection.readTimeout = 8000
-            connection.requestMethod = "GET"
-
+            connection.connectTimeout = 8000
+            connection.readTimeout = 10000
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             if (connection.responseCode == 200) {
                 val text = connection.inputStream.bufferedReader().use { it.readText() }
-                val fullArray = org.json.JSONArray(text)
+                val json = org.json.JSONObject(text)
+                val chart = json.getJSONObject("chart")
+                val result = chart.getJSONArray("result")
+                if (result.length() > 0) {
+                    val firstResult = result.getJSONObject(0)
+                    val timestampArray = firstResult.getJSONArray("timestamp")
+                    val indicators = firstResult.getJSONObject("indicators")
+                    val quoteArray = indicators.getJSONArray("quote")
+                    if (quoteArray.length() > 0) {
+                        val quoteObj = quoteArray.getJSONObject(0)
+                        val closeArray = quoteObj.getJSONArray("close")
 
-                // Only keep the last ~6 years - plenty for the Today/30D/6M/1Y/5Y views,
-                // and much smaller/faster than parsing all 768 years of data every time.
-                val calendar = java.util.Calendar.getInstance()
-                calendar.add(java.util.Calendar.YEAR, -6)
-                val cutoff = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-                    .format(calendar.time)
+                        val calendar = java.util.Calendar.getInstance()
+                        calendar.add(java.util.Calendar.YEAR, -6)
+                        val cutoff = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(calendar.time)
 
-                val recent = mutableListOf<GoldHistoryPoint>()
-                for (i in 0 until fullArray.length()) {
-                    val obj = fullArray.getJSONObject(i)
-                    val date = obj.optString("date", "")
-                    val price = obj.optDouble("price", -1.0)
-                    if (date >= cutoff && price > 0.0) {
-                        recent.add(GoldHistoryPoint(date, price))
+                        val recent = mutableListOf<GoldHistoryPoint>()
+                        val len = timestampArray.length()
+                        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+
+                        for (i in 0 until len) {
+                            val ts = timestampArray.optLong(i, -1L)
+                            if (ts != -1L) {
+                                val price = closeArray.optDouble(i, -1.0)
+                                if (price > 0.0 && !price.isNaN() && !price.isInfinite()) {
+                                    val dateStr = sdf.format(java.util.Date(ts * 1000))
+                                    if (dateStr >= cutoff) {
+                                        recent.add(GoldHistoryPoint(dateStr, price))
+                                    }
+                                }
+                            }
+                        }
+
+                        _goldHistory.value = recent.sortedBy { it.date }
+                        _goldHistoryStatus.value = "Real data loaded (${recent.size} records)"
                     }
                 }
-
-                _goldHistory.value = recent.sortedBy { it.date }
-                _goldHistoryStatus.value = "Real historical data loaded (${recent.size} records)"
-            } else {
-                _goldHistoryStatus.value = "Could not load historical data (HTTP ${connection.responseCode})"
             }
         } catch (e: Throwable) {
-            _goldHistoryStatus.value = "Could not load historical data - showing live price only"
+            _goldHistoryStatus.value = "History fallback active (live price only)"
+            _goldHistory.value = emptyList()
         }
     }
 
     private fun fetchSpotGoldPrice() {
+        _goldPriceUSD.value = 133.5 // temporary safe fallback (real ~USD/gram)
+
+        // Primary: Yahoo Finance API
         try {
-            // Try api.gold-api.com first
-            val url = java.net.URL("https://api.gold-api.com/price/XAU")
+            val url = java.net.URL("https://query1.finance.yahoo.com/v8/finance/chart/GC=F?range=1d&interval=1d")
             val connection = url.openConnection() as java.net.HttpURLConnection
-            connection.connectTimeout = 4000
-            connection.readTimeout = 4000
-            connection.requestMethod = "GET"
+            connection.connectTimeout = 5000
+            connection.readTimeout = 5000
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             if (connection.responseCode == 200) {
                 val text = connection.inputStream.bufferedReader().use { it.readText() }
-                // Parse "price" : 2350.5 or "price":75.60
-                val priceRegex = """"price"\s*:\s*([0-9.]+)""".toRegex()
-                val match = priceRegex.find(text)
-                val priceValue = match?.groupValues?.get(1)?.toDoubleOrNull()
-                if (priceValue != null && priceValue > 0.0) {
-                    if (priceValue > 400.0) {
-                        // Per troy ounce, convert to per gram
-                        _goldPriceUSD.value = priceValue / 31.1034768
-                    } else {
-                        // Per gram already
-                        _goldPriceUSD.value = priceValue
+                val json = org.json.JSONObject(text)
+                val chart = json.getJSONObject("chart")
+                val result = chart.getJSONArray("result")
+                if (result.length() > 0) {
+                    val firstResult = result.getJSONObject(0)
+                    val meta = firstResult.getJSONObject("meta")
+                    val regularMarketPrice = meta.optDouble("regularMarketPrice", -1.0)
+                    if (regularMarketPrice > 1000.0) {  // per oz
+                        _goldPriceUSD.value = regularMarketPrice / 31.1034768
+                        return
                     }
-                    return
                 }
             }
-        } catch (e: Throwable) {
-            // Ignore and fall back to CoinGecko
-        }
+        } catch (e: Throwable) {}
 
+        // Fallback: CoinGecko Pax Gold
         try {
-            // Try CoinGecko PAX Gold as a highly reliable secondary keyless source
             val url = java.net.URL("https://api.coingecko.com/api/v3/simple/price?ids=pax-gold&vs_currencies=usd")
             val connection = url.openConnection() as java.net.HttpURLConnection
-            connection.connectTimeout = 4000
-            connection.readTimeout = 4000
-            connection.requestMethod = "GET"
+            connection.connectTimeout = 5000
+            connection.readTimeout = 5000
             if (connection.responseCode == 200) {
                 val text = connection.inputStream.bufferedReader().use { it.readText() }
                 val priceRegex = """"usd"\s*:\s*([0-9.]+)""".toRegex()
                 val match = priceRegex.find(text)
-                val priceValue = match?.groupValues?.get(1)?.toDoubleOrNull()
-                if (priceValue != null && priceValue > 0.0) {
-                    // PAXG tracks physical gold price per troy ounce. Convert to per gram.
-                    _goldPriceUSD.value = priceValue / 31.1034768
+                val priceOz = match?.groupValues?.get(1)?.toDoubleOrNull()
+                if (priceOz != null && priceOz > 1000) {
+                    _goldPriceUSD.value = priceOz / 31.1034768
                     return
                 }
             }
-        } catch (e: Throwable) {
-            // Fall back to default
-        }
+        } catch (e: Throwable) {}
     }
 
     // --- History Functions ---

@@ -2780,7 +2780,7 @@ fun GoldPriceScreen(
     // 1 USD to MYR exchange rate (e.g. 4.72 as fallback)
     val myrRate = currencyRates["MYR"] ?: 4.72
 
-    // Interactive chart period (0: Today, 1: 30 Days, 2: 6 Months, 3: 1 Year, 4: 5 Years)
+    // Interactive chart period (0: Today, 1: 6 Months, 2: 1 Year, 3: 5 Years)
     var chartPeriod by remember { mutableStateOf(1) }
 
     // Selected day/index in the current historical list (re-bound when the selected period changes)
@@ -2795,16 +2795,15 @@ fun GoldPriceScreen(
     // chart is the live price multiplied by a made-up ratio; every non-"Live" point is an
     // actual recorded price. If the fetch hasn't completed yet (or failed), the period lists
     // fall back to just "Live" so nothing fabricated is ever shown.
-    val (historicalDataToday, historicalData30Days, historicalData6Months,
+    val (historicalDataToday, historicalData6Months,
         historicalData1Year, historicalData5Years) = remember(goldHistory, spotGoldUSDPerGram) {
         buildGoldChartData(goldHistory, spotGoldUSDPerGram, ozToGram)
     }
 
     val currentData = when (chartPeriod) {
         0 -> historicalDataToday
-        1 -> historicalData30Days
-        2 -> historicalData6Months
-        3 -> historicalData1Year
+        1 -> historicalData6Months
+        2 -> historicalData1Year
         else -> historicalData5Years
     }
 
@@ -2945,9 +2944,8 @@ fun GoldPriceScreen(
                             )
                             val selectionPrefix = when (chartPeriod) {
                                 0 -> "Selected Hour"
-                                1 -> "Selected Day"
+                                1 -> "Selected Month"
                                 2 -> "Selected Month"
-                                3 -> "Selected Month"
                                 else -> "Selected Month"
                             }
                             Text(
@@ -3023,7 +3021,7 @@ fun GoldPriceScreen(
                             .padding(2.dp),
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        listOf("Today" to 0, "30D" to 1, "6M" to 2, "1Y" to 3, "5Y" to 4).forEach { (label, index) ->
+                        listOf("Today" to 0, "6M" to 1, "1Y" to 2, "5Y" to 3).forEach { (label, index) ->
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(6.dp))
@@ -3566,9 +3564,7 @@ fun buildGoldChartData(
     ozToGram: Double
 ): List<List<GoldPricePoint>> {
     val liveOnly = listOf(GoldPricePoint("Live", spotGoldUSDPerGram))
-    if (history.isEmpty()) {
-        return List(5) { liveOnly }
-    }
+    if (history.isEmpty()) return List(4) { liveOnly }
 
     val isoFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
@@ -3581,10 +3577,8 @@ fun buildGoldChartData(
     fun shortLabel(iso: String, pattern: String): String {
         return try {
             val parsed = isoFormat.parse(iso)
-            if (parsed != null) SimpleDateFormat(pattern, Locale.US).format(parsed) else iso
-        } catch (e: Throwable) {
-            iso
-        }
+            if (parsed != null) SimpleDateFormat(pattern, Locale.US).format(parsed) else iso.takeLast(5)
+        } catch (e: Throwable) { iso.takeLast(5) }
     }
 
     fun <T> sampleEvenly(list: List<T>, count: Int): List<T> {
@@ -3593,25 +3587,28 @@ fun buildGoldChartData(
         return (0 until count).map { i -> list[(i * step).roundToInt().coerceIn(0, list.size - 1)] }
     }
 
-    fun buildSeries(cutoff: String, pattern: String, sampleCount: Int): List<GoldPricePoint> {
-        val filtered = history.filter { it.date >= cutoff }
+    fun buildSeries(cutoff: String, pattern: String, sampleCount: Int, fallbackDays: Int = 40): List<GoldPricePoint> {
+        var filtered = history.filter { it.date >= cutoff }
+        if (filtered.isEmpty()) {
+            // Fallback to nearest available (e.g., 1-2 months) as requested
+            val fallbackCutoff = cutoffDate(Calendar.DAY_OF_YEAR, fallbackDays)
+            filtered = history.filter { it.date >= fallbackCutoff }
+        }
         if (filtered.isEmpty()) return liveOnly
+
         val sampled = sampleEvenly(filtered, sampleCount)
         return sampled.map { GoldPricePoint(shortLabel(it.date, pattern), it.priceUSDPerOz / ozToGram) } + liveOnly
     }
 
-    // Today: the most recent real record (usually yesterday's close) plus the live price -
-    // an honest 2-point "change since last close" line, no fabricated intraday jitter.
     val today = history.lastOrNull()?.let {
         listOf(GoldPricePoint(shortLabel(it.date, "MMM dd"), it.priceUSDPerOz / ozToGram)) + liveOnly
     } ?: liveOnly
 
-    val thirtyDays = buildSeries(cutoffDate(Calendar.DAY_OF_YEAR, 30), "MMM dd", 6)
-    val sixMonths = buildSeries(cutoffDate(Calendar.MONTH, 6), "MMM", 6)
-    val oneYear = buildSeries(cutoffDate(Calendar.YEAR, 1), "MMM yy", 6)
-    val fiveYears = buildSeries(cutoffDate(Calendar.YEAR, 5), "MMM ''yy", 6)
+    val sixMonths = buildSeries(cutoffDate(Calendar.MONTH, 6), "MMM", 8)
+    val oneYear = buildSeries(cutoffDate(Calendar.YEAR, 1), "MMM yy", 8)
+    val fiveYears = buildSeries(cutoffDate(Calendar.YEAR, 5), "MMM ''yy", 8)
 
-    return listOf(today, thirtyDays, sixMonths, oneYear, fiveYears)
+    return listOf(today, sixMonths, oneYear, fiveYears)
 }
 
 
