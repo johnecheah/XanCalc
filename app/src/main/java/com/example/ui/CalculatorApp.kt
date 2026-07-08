@@ -3618,7 +3618,7 @@ fun buildGoldChartData(
     val thirtyDays = buildSeries(cutoffDate(Calendar.DAY_OF_YEAR, 30), "dd", 29)
     val sixMonths = buildSeries(cutoffDate(Calendar.MONTH, 6), "MMM yy", 179)
     val oneYear = buildSeries(cutoffDate(Calendar.YEAR, 1), "MMM yy", 364)
-    val fiveYears = buildSeries(cutoffDate(Calendar.YEAR, 5), "yyyy", 1824)
+    val fiveYears = buildSeries(cutoffDate(Calendar.YEAR, 5), "yyyy", 364)
 
     return listOf(thirtyDays, sixMonths, oneYear, fiveYears)
 }
