@@ -2781,7 +2781,7 @@ fun GoldPriceScreen(
     val myrRate = currencyRates["MYR"] ?: 4.72
 
     // Interactive chart period (0: 30D, 1: 6 Months, 2: 1 Year, 3: 5 Years)
-    var chartPeriod by remember { mutableStateOf(1) }
+    var chartPeriod by remember { mutableStateOf(0) }
 
     // Selected day/index in the current historical list (re-bound when the selected period changes)
     var selectedChartIndex by remember(chartPeriod) { mutableStateOf<Int?>(null) }
