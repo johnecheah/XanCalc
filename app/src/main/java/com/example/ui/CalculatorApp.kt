@@ -437,7 +437,7 @@ fun CalculatorApp(viewModel: CalculatorViewModel) {
                             color = LightChalk.copy(alpha = 0.6f)
                         )
                         Text(
-                            text = "Johne Cheah",
+                            text = "ThreeJ",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = LightChalk
@@ -446,12 +446,6 @@ fun CalculatorApp(viewModel: CalculatorViewModel) {
                             text = "@ 2026",
                             fontSize = 13.sp,
                             color = PrimaryOrange.copy(alpha = 0.9f)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "Version V2.2",
-                            fontSize = 12.sp,
-                            color = LightChalk.copy(alpha = 0.5f)
                         )
                     }
                 },
@@ -2765,6 +2759,40 @@ fun CurrencySelectDialog(
     }
 }
 
+// Helper function for currency symbols in Gold tab
+fun getCurrencySymbol(code: String): String {
+    return when (code) {
+        "USD" -> "$"
+        "EUR" -> "€"
+        "GBP" -> "£"
+        "JPY" -> "¥"
+        "MYR" -> "RM "
+        "SGD" -> "S$"
+        "AUD" -> "A$"
+        "CAD" -> "C$"
+        "CNY" -> "¥"
+        "INR" -> "₹"
+        "CHF" -> "CHF "
+        "HKD" -> "HK$"
+        "NZD" -> "NZ$"
+        "KRW" -> "₩"
+        "AED" -> "AED "
+        "THB" -> "฿"
+        "IDR" -> "Rp "
+        "PHP" -> "₱"
+        "BRL" -> "R$ "
+        "TWD" -> "NT$"
+        "SAR" -> "SAR "
+        "TRY" -> "₺"
+        "RUB" -> "₽"
+        "ZAR" -> "R "
+        "EGP" -> "EGP "
+        "KWD" -> "KWD "
+        "QAR" -> "QAR "
+        else -> "$code "
+    }
+}
+
 @Composable
 fun GoldPriceScreen(
     viewModel: CalculatorViewModel,
@@ -2777,8 +2805,23 @@ fun GoldPriceScreen(
     val goldHistory by viewModel.goldHistory.collectAsStateWithLifecycle()
     val goldHistoryStatus by viewModel.goldHistoryStatus.collectAsStateWithLifecycle()
 
-    // 1 USD to MYR exchange rate (e.g. 4.72 as fallback)
-    val myrRate = currencyRates["MYR"] ?: 4.72
+    // Selected Currency for Gold calculation & display
+    var selectedCurrencyCode by remember { mutableStateOf("MYR") }
+    val selectedRate = currencyRates[selectedCurrencyCode] ?: when (selectedCurrencyCode) {
+        "USD" -> 1.0
+        "MYR" -> 4.72
+        "EUR" -> 0.92
+        "GBP" -> 0.78
+        "JPY" -> 155.0
+        "CAD" -> 1.36
+        "AUD" -> 1.50
+        "SGD" -> 1.35
+        "CNY" -> 7.25
+        "INR" -> 83.5
+        else -> 1.0
+    }
+    val selectedSymbol = getCurrencySymbol(selectedCurrencyCode)
+    val selectedCurrencyName = CalculatorViewModel.ALL_CURRENCIES[selectedCurrencyCode] ?: selectedCurrencyCode
 
     // Interactive chart period (0: 30D, 1: 6 Months, 2: 1 Year, 3: 5 Years)
     var chartPeriod by remember { mutableStateOf(0) }
@@ -2790,11 +2833,6 @@ fun GoldPriceScreen(
     val ozToGram = 31.1034768
 
     // Build each period's chart data from the REAL history fetched from FreeGoldAPI.com
-    // (blend of Yahoo Finance daily futures + World Bank monthly data, all attributed to a
-    // real public source - see CalculatorViewModel.fetchGoldHistory()). No point on this
-    // chart is the live price multiplied by a made-up ratio; every non-"Live" point is an
-    // actual recorded price. If the fetch hasn't completed yet (or failed), the period lists
-    // fall back to just "Live" so nothing fabricated is ever shown.
     val (historicalData30Days, historicalData6Months,
         historicalData1Year, historicalData5Years) = remember(goldHistory, spotGoldUSDPerGram) {
         buildGoldChartData(goldHistory, spotGoldUSDPerGram, ozToGram)
@@ -2812,8 +2850,8 @@ fun GoldPriceScreen(
     val activePoint = currentData[activeIndex.coerceIn(currentData.indices)]
     val activeGoldUSD = activePoint.priceInUSD
 
-    // Dynamic Gold Price in MYR per gram (24K) based on selection
-    val price24K = activeGoldUSD * myrRate
+    // Dynamic Gold Price in selected currency per gram (24K) based on selection
+    val price24K = activeGoldUSD * selectedRate
     val price22K = price24K * 0.916 // 916 Gold purity
     val price18K = price24K * 0.750 // 750 Gold purity
     val price14K = price24K * 0.585 // 585 Gold purity
@@ -2830,7 +2868,7 @@ fun GoldPriceScreen(
     // Calculate gold value based on input weight
     val inputWeight = goldWeightInput.toDoubleOrNull() ?: 0.0
     val activePurity = karatPurities[selectedKaratIndex]
-    val calculatedValueMYR = inputWeight * price24K * activePurity
+    val calculatedValueCurrency = inputWeight * price24K * activePurity
 
     Column(
         modifier = Modifier
@@ -2839,6 +2877,142 @@ fun GoldPriceScreen(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Currency Switcher Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("gold_currency_switcher"),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF131522)),
+            border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.25f))
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CurrencyExchange,
+                            contentDescription = "Currency Switcher",
+                            tint = Color(0xFFFFD700),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Currency:",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+
+                    // Dropdown Button for all World Currencies
+                    var expandedDropdown by remember { mutableStateOf(false) }
+                    Box {
+                        Surface(
+                            onClick = { expandedDropdown = true },
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFFFFD700).copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.4f)),
+                            modifier = Modifier.testTag("btn_select_currency")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "$selectedCurrencyCode ($selectedCurrencyName)",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFFD700)
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDropDown,
+                                    contentDescription = "Dropdown",
+                                    tint = Color(0xFFFFD700),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = expandedDropdown,
+                            onDismissRequest = { expandedDropdown = false },
+                            modifier = Modifier
+                                .background(Color(0xFF1E2130))
+                                .heightIn(max = 280.dp)
+                        ) {
+                            CalculatorViewModel.ALL_CURRENCIES.forEach { (code, name) ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = code,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (code == selectedCurrencyCode) Color(0xFFFFD700) else Color.White,
+                                                fontSize = 13.sp
+                                            )
+                                            Text(
+                                                text = name,
+                                                color = Color.Gray,
+                                                fontSize = 11.sp
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        selectedCurrencyCode = code
+                                        expandedDropdown = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Scrollable Row of popular currency chips
+                val popularCurrencies = listOf("USD", "MYR", "EUR", "GBP", "SGD", "JPY", "AUD", "CAD", "INR", "CNY")
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    popularCurrencies.forEach { code ->
+                        val isSelected = selectedCurrencyCode == code
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) Color(0xFFFFD700) else Color(0xFF191C2B))
+                                .border(
+                                    1.dp,
+                                    if (isSelected) Color(0xFFFFD700) else Color.Gray.copy(alpha = 0.2f),
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .clickable { selectedCurrencyCode = code }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = code,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSelected) Color.Black else Color.White
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // Live Price Hero Banner
         Card(
             modifier = Modifier
@@ -2879,9 +3053,9 @@ fun GoldPriceScreen(
                             )
                             Text(
                                 text = if (isHistoricalSelection) {
-                                    "HISTORICAL SPOT GOLD (MALAYSIA)"
+                                    "HISTORICAL SPOT GOLD ($selectedCurrencyCode)"
                                 } else {
-                                    "LIVE SPOT GOLD (MALAYSIA)"
+                                    "LIVE SPOT GOLD ($selectedCurrencyCode)"
                                 },
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
@@ -2911,7 +3085,7 @@ fun GoldPriceScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = "RM ${String.format(Locale.US, "%,.2f", price24K)}",
+                            text = "$selectedSymbol${String.format(Locale.US, "%,.2f", price24K)}",
                             fontSize = 32.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -2947,7 +3121,7 @@ fun GoldPriceScreen(
                                 text = if (isHistoricalSelection) {
                                     if (activePoint.fullDateLabel == "Live") "Selected: Live" else "$selectionPrefix: ${activePoint.fullDateLabel}"
                                 } else {
-                                    "+RM 5.25 (+1.45%) Today"
+                                    "+$selectedSymbol${String.format(Locale.US, "%.2f", 1.12 * selectedRate)} (+1.45%) Today"
                                 },
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -3003,7 +3177,7 @@ fun GoldPriceScreen(
                             color = Color.White
                         )
                         Text(
-                            text = "Spot rate in MYR / g",
+                            text = "Spot rate in $selectedCurrencyCode / g",
                             fontSize = 11.sp,
                             color = Color.Gray
                         )
@@ -3046,7 +3220,8 @@ fun GoldPriceScreen(
                 }
                 InteractiveGoldChart(
                     dataPoints = currentData,
-                    myrRate = myrRate,
+                    conversionRate = selectedRate,
+                    currencySymbol = selectedSymbol,
                     selectedIndex = selectedChartIndex,
                     onSelectedIndexChange = { selectedChartIndex = it },
                     labelCount = chartLabelCount,
@@ -3075,7 +3250,7 @@ fun GoldPriceScreen(
 
         val breakdownList = listOf(
             Triple("24K Gold (99.9%)", price24K, "Investment bars, Gold bullion coins"),
-            Triple("22K Gold (916)", price22K, "Traditional Malaysian bridal jewelry"),
+            Triple("22K Gold (916)", price22K, "Traditional jewelry"),
             Triple("18K Gold (750)", price18K, "Diamond settings, Western luxury jewelry"),
             Triple("14K Gold (585)", price14K, "Strong alloy jewelry, affordable wear")
         )
@@ -3110,7 +3285,7 @@ fun GoldPriceScreen(
                             )
                         }
                         Text(
-                            text = "RM ${String.format(Locale.US, "%,.2f", price)} / g",
+                            text = "$selectedSymbol${String.format(Locale.US, "%,.2f", price)} / g",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (title.startsWith("24K") || title.startsWith("22K")) Color(0xFFFFD700) else Color.White
@@ -3245,7 +3420,7 @@ fun GoldPriceScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "ESTIMATED GOLD VALUE",
+                            text = "ESTIMATED GOLD VALUE ($selectedCurrencyCode)",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.Gray,
@@ -3253,7 +3428,7 @@ fun GoldPriceScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "RM ${String.format(Locale.US, "%,.2f", calculatedValueMYR)}",
+                            text = "$selectedSymbol${String.format(Locale.US, "%,.2f", calculatedValueCurrency)}",
                             fontSize = 26.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color(0xFFFFD700)
@@ -3355,14 +3530,15 @@ fun GoldPriceScreen(
 @Composable
 fun InteractiveGoldChart(
     dataPoints: List<GoldPricePoint>,
-    myrRate: Double,
+    conversionRate: Double,
+    currencySymbol: String = "$",
     selectedIndex: Int?,
     onSelectedIndexChange: (Int?) -> Unit,
     modifier: Modifier = Modifier,
     labelCount: Int = 5
 ) {
-    val minPrice = dataPoints.minOf { it.priceInUSD } * myrRate
-    val maxPrice = dataPoints.maxOf { it.priceInUSD } * myrRate
+    val minPrice = dataPoints.minOf { it.priceInUSD } * conversionRate
+    val maxPrice = dataPoints.maxOf { it.priceInUSD } * conversionRate
     val priceRange = if (maxPrice - minPrice == 0.0) 1.0 else maxPrice - minPrice
 
     // Add extra margin to top and bottom of chart to prevent clipping
@@ -3372,7 +3548,7 @@ fun InteractiveGoldChart(
 
     val activeIndex = (selectedIndex ?: (dataPoints.size - 1)).coerceIn(dataPoints.indices)
     val activePoint = dataPoints[activeIndex]
-    val activePriceMYR = activePoint.priceInUSD * myrRate
+    val activePriceConverted = activePoint.priceInUSD * conversionRate
 
     Column(modifier = modifier) {
         // Selection Detail Row
@@ -3390,7 +3566,7 @@ fun InteractiveGoldChart(
                 color = Color.Gray
             )
             Text(
-                text = "RM ${String.format(Locale.US, "%.2f", activePriceMYR)}",
+                text = "$currencySymbol${String.format(Locale.US, "%.2f", activePriceConverted)}",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFFFFD700)
@@ -3440,7 +3616,7 @@ fun InteractiveGoldChart(
                 // 2. Compute coordinates
                 val coordinates = dataPoints.mapIndexed { idx, pt ->
                     val x = idx * colWidth
-                    val yVal = pt.priceInUSD * myrRate
+                    val yVal = pt.priceInUSD * conversionRate
                     // Map yVal to pixel y (invert because 0 is at top)
                     val y = height - (((yVal - chartMin) / chartRange) * height).toFloat()
                     androidx.compose.ui.geometry.Offset(x, y)
