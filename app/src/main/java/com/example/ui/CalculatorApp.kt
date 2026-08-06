@@ -142,14 +142,13 @@ fun CalculatorApp(viewModel: CalculatorViewModel) {
                 .fillMaxSize()
                 .background(Brush.verticalGradient(listOf(DarkBgStart, DarkBgEnd))),
             containerColor = Color.Transparent,
+            contentWindowInsets = WindowInsets.safeDrawing,
             bottomBar = {
                 if (!isInPip) {
                     NavigationBar(
                         containerColor = Color(0xFF131522),
                         tonalElevation = 8.dp,
-                        modifier = Modifier
-                            .windowInsetsPadding(WindowInsets.navigationBars)
-                            .testTag("bottom_nav_bar")
+                        modifier = Modifier.testTag("bottom_nav_bar")
                     ) {
                         NavigationBarItem(
                             selected = selectedTab == CalculatorTab.STANDARD,
@@ -229,7 +228,6 @@ fun CalculatorApp(viewModel: CalculatorViewModel) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .statusBarsPadding()
             ) {
                 // Elegant top row displaying the Calculator branding
                 if (!isInPip) {
