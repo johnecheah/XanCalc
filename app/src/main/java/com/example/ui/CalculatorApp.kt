@@ -430,7 +430,7 @@ fun CalculatorApp(viewModel: CalculatorViewModel) {
                         horizontalAlignment = Alignment.Start
                     ) {
                         Text(
-                            text = "Created by",
+                            text = "Powered by",
                             fontSize = 14.sp,
                             color = LightChalk.copy(alpha = 0.6f)
                         )
