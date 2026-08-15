@@ -15,11 +15,18 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Set up JDK 17
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v5
       with:
         java-version: '17'
         distribution: 'zulu'
         cache: gradle
+
+    - name: Ensure Gradle Wrapper Exists
+      run: |
+        if [ ! -f "./gradlew" ]; then
+          echo "gradlew missing! Generating a fresh wrapper..."
+          gradle wrapper
+        fi
 
     - name: Change Gradle Script Permissions
       run: chmod +x ./gradlew
@@ -42,4 +49,3 @@ jobs:
       with:
         name: XanCalc-Debug-Symbols
         path: app/build/outputs/native_debug_symbols/release/native_debug_symbols.zip
-        
