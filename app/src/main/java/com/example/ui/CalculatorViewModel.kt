@@ -157,7 +157,7 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
     // --- Currency Converter States ---
     private val currencyPrefs = application.getSharedPreferences("currency_prefs", android.content.Context.MODE_PRIVATE)
 
-    private val _currencyInput = MutableStateFlow("1")
+    private val _currencyInput = MutableStateFlow("0")
     val currencyInput: StateFlow<String> = _currencyInput.asStateFlow()
 
     private val _fromCurrency = MutableStateFlow("SGD")
@@ -711,18 +711,18 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
         val current = _currencyInput.value
         when (key) {
             "AC" -> {
-                _currencyInput.value = "1"
+                _currencyInput.value = "0"
             }
             "DEL" -> {
                 if (current.isNotEmpty()) {
                     val next = current.substring(0, current.length - 1)
-                    _currencyInput.value = next.ifEmpty { "1" }
+                    _currencyInput.value = next.ifEmpty { "0" }
                 } else {
-                    _currencyInput.value = "1"
+                    _currencyInput.value = "0"
                 }
             }
             "+/-" -> {
-                if (current != "0" && current != "1" && current.isNotEmpty()) {
+                if (current != "0" && current.isNotEmpty()) {
                     _currencyInput.value = if (current.startsWith("-")) {
                         current.substring(1)
                     } else {
@@ -736,7 +736,7 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
                 }
             }
             else -> {
-                if (current == "0" || current == "1") {
+                if (current == "0") {
                     _currencyInput.value = key
                 } else {
                     _currencyInput.value = current + key

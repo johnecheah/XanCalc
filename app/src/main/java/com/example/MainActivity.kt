@@ -3,9 +3,7 @@ package com.example
 import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
-import android.graphics.Color as AndroidColor
 import androidx.activity.ComponentActivity
-import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +20,7 @@ class MainActivity : ComponentActivity() {
   private lateinit var viewModel: CalculatorViewModel
 
   override fun onCreate(savedInstanceState: Bundle?) {
+    enableEdgeToEdge()
     val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
     Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
       Log.e("CalculatorCrash", "CRASH DETECTED on thread ${thread.name}", throwable)
@@ -31,10 +30,6 @@ class MainActivity : ComponentActivity() {
     }
 
     super.onCreate(savedInstanceState)
-    enableEdgeToEdge(
-      statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
-      navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT)
-    )
 
     val factory = CalculatorViewModelFactory(application)
     viewModel = ViewModelProvider(this, factory)[CalculatorViewModel::class.java]
