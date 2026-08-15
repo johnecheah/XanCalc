@@ -8,6 +8,7 @@ plugins {
 
 android {
   namespace = "com.example"
+  ndkVersion = "25.1.8937393"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
@@ -41,7 +42,7 @@ android {
       isCrunchPngs = false
       isMinifyEnabled = true
       isShrinkResources = true
-      ndk.debugSymbolLevel = "SYMBOL_TABLE"
+      ndk.debugSymbolLevel = "FULL"
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
