@@ -15,10 +15,14 @@ android {
     applicationId = "com.aistudio.calculator.calcsh"
     minSdk = 24
     targetSdk = 36
-    versionCode = 13
-    versionName = "13.0"
+    versionCode = 14
+    versionName = "14.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    ndk {
+      debugSymbolLevel = "SYMBOL_TABLE"
+    }
   }
 
   signingConfigs {
@@ -42,7 +46,9 @@ android {
       isCrunchPngs = false
       isMinifyEnabled = true
       isShrinkResources = true
-      ndk.debugSymbolLevel = "FULL"
+      ndk {
+        debugSymbolLevel = "SYMBOL_TABLE"
+      }
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
