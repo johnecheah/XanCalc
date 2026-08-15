@@ -14,9 +14,9 @@ android {
   defaultConfig {
     applicationId = "com.aistudio.calculator.calcsh"
     minSdk = 24
-    targetSdk = 36
-    versionCode = 16
-    versionName = "2.6"
+    targetSdk = 35
+    versionCode = 17
+    versionName = "2.7"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
