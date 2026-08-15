@@ -14,8 +14,8 @@ android {
     applicationId = "com.aistudio.calculator.calcsh"
     minSdk = 24
     targetSdk = 36
-    versionCode = 12
-    versionName = "2.2"
+    versionCode = 13
+    versionName = "13.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
