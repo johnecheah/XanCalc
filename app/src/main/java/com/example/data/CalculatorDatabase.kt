@@ -20,7 +20,7 @@ abstract class CalculatorDatabase : RoomDatabase() {
                     CalculatorDatabase::class.java,
                     "calculator_database"
                 )
-                .fallbackToDestructiveMigration()
+                .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
                 INSTANCE = instance
                 instance
