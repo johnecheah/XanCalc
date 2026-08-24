@@ -3484,7 +3484,7 @@ fun GoldPriceScreen(
                                                     goldWeightInput = if (goldWeightInput.isEmpty()) "0." else goldWeightInput + "."
                                                 }
                                             } else {
-                                                if (goldWeightInput == "0" || goldWeightInput == "1") {
+                                                if (goldWeightInput == "0") {
                                                     goldWeightInput = key
                                                 } else {
                                                     if (goldWeightInput.length < 8) {
