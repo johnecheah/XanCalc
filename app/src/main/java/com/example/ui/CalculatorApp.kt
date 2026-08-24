@@ -3331,7 +3331,7 @@ fun GoldPriceScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Gram Input
+                // Gram Input (Unclickable, input driven by quick input pad)
                 Text(
                     text = "Gold Weight (Grams)",
                     fontSize = 11.sp,
@@ -3339,29 +3339,24 @@ fun GoldPriceScreen(
                     color = Color.Gray
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                OutlinedTextField(
-                    value = goldWeightInput,
-                    onValueChange = {
-                        // Keep only numbers and a single decimal point
-                        if (it.isEmpty() || it.toDoubleOrNull() != null || it == ".") {
-                            goldWeightInput = it
-                        }
-                    },
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .height(56.dp)
                         .background(Color(0xFF131522), RoundedCornerShape(12.dp))
+                        .border(1.dp, Color.Gray.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 16.dp)
                         .testTag("input_gold_weight"),
-                    placeholder = { Text("0.0", color = Color.DarkGray) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFFFFD700),
-                        unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f),
-                        cursorColor = Color(0xFFFFD700)
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Text(
+                        text = if (goldWeightInput.isEmpty()) "0.0" else goldWeightInput,
+                        color = if (goldWeightInput.isEmpty()) Color.DarkGray else Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1
                     )
-                )
+                }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
