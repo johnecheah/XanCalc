@@ -157,7 +157,7 @@ class CalculatorViewModel(application: Application) : AndroidViewModel(applicati
     // --- Currency Converter States ---
     private val currencyPrefs = application.getSharedPreferences("currency_prefs", android.content.Context.MODE_PRIVATE)
 
-    private val _currencyInput = MutableStateFlow("0")
+    private val _currencyInput = MutableStateFlow("1")
     val currencyInput: StateFlow<String> = _currencyInput.asStateFlow()
 
     private val _fromCurrency = MutableStateFlow("SGD")

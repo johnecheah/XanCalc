@@ -133,13 +133,14 @@ class ExampleRobolectricTest {
     val viewModel = CalculatorViewModel(app)
 
     // Check default currency states
-    assertEquals("0", viewModel.currencyInput.value)
+    assertEquals("1", viewModel.currencyInput.value)
     assertEquals("SGD", viewModel.fromCurrency.value)
     assertEquals("MYR", viewModel.toCurrency.value)
 
     // Set currency from USD to EUR
     viewModel.setFromCurrency("USD")
     viewModel.setToCurrency("EUR")
+    viewModel.onCurrencyKeyPress("AC")
     viewModel.onCurrencyKeyPress("1")
     viewModel.onCurrencyKeyPress("0")
     viewModel.onCurrencyKeyPress("0")
