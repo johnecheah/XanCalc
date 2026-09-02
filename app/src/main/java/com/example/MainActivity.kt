@@ -1,7 +1,5 @@
 package com.example
 
-import android.content.Context
-import android.content.res.Configuration
 import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
@@ -20,20 +18,6 @@ import com.example.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
   private lateinit var viewModel: CalculatorViewModel
-
-  override fun attachBaseContext(newBase: Context) {
-    val configuration = newBase.resources.configuration
-    val config = Configuration(configuration).apply {
-      fontScale = 1.0f
-    }
-    val newContext = newBase.createConfigurationContext(config)
-    super.attachBaseContext(newContext)
-  }
-
-  override fun onConfigurationChanged(newConfig: Configuration) {
-    newConfig.fontScale = 1.0f
-    super.onConfigurationChanged(newConfig)
-  }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()

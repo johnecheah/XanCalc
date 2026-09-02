@@ -129,13 +129,21 @@ fun CalculatorApp(viewModel: CalculatorViewModel) {
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val screenWidth = configuration.screenWidthDp
     val screenHeight = configuration.screenHeightDp
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val isMultiWindow = activity?.isInMultiWindowMode == true
-    val isHorizontalLayout = (screenWidth > screenHeight || isMultiWindow) && screenWidth >= 400
+    val isHorizontalLayout = isLandscape || (screenWidth > screenHeight) || (isMultiWindow && screenWidth >= 400)
     // On bigger small windows/resizable floating screens like iQOO 12, screen is bigger than a typical micro video PiP player.
     // In that case, we should use the normal size instead of shrinking fonts and elements, making it perfectly usable.
     val isMicroLayout = isInPip && (screenWidth < 240 || screenHeight < 320)
 
-    CompositionLocalProvider(LocalIsInPip provides isMicroLayout) {
+    val currentDensity = androidx.compose.ui.platform.LocalDensity.current
+    CompositionLocalProvider(
+        LocalIsInPip provides isMicroLayout,
+        androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(
+            density = currentDensity.density,
+            fontScale = 1.0f
+        )
+    ) {
         // Base Scaffold handles edge to edge layouts gracefully
         Scaffold(
             modifier = Modifier

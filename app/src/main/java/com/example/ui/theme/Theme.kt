@@ -9,6 +9,8 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -52,11 +54,19 @@ fun MyApplicationTheme(
     }
 
   val currentDensity = LocalDensity.current
+  val currentConfig = LocalConfiguration.current
+  val fixedFontConfig = remember(currentConfig) {
+    android.content.res.Configuration(currentConfig).apply {
+      fontScale = 1.0f
+    }
+  }
+
   CompositionLocalProvider(
     LocalDensity provides Density(
       density = currentDensity.density,
-      fontScale = 1.0f,
-    )
+      fontScale = 1.0f
+    ),
+    LocalConfiguration provides fixedFontConfig
   ) {
     MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
   }
