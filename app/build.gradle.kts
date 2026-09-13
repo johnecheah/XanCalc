@@ -15,8 +15,8 @@ android {
     applicationId = "com.aistudio.calculator.calcsh"
     minSdk = 24
     targetSdk = 36
-    versionCode = 28
-    versionName = "28.0"
+    versionCode = 29
+    versionName = "29.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -45,8 +45,8 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = false
-      isShrinkResources = false
+      isMinifyEnabled = true
+      isShrinkResources = true
       ndk {
         debugSymbolLevel = "SYMBOL_TABLE"
       }
