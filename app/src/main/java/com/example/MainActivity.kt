@@ -1,14 +1,16 @@
 package com.example
 
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.CalculatorApp
@@ -20,7 +22,7 @@ class MainActivity : ComponentActivity() {
   private lateinit var viewModel: CalculatorViewModel
 
   override fun onCreate(savedInstanceState: Bundle?) {
-    enableEdgeToEdge()
+    setupEdgeToEdge()
     val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
     Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
       Log.e("CalculatorCrash", "CRASH DETECTED on thread ${thread.name}", throwable)
@@ -40,6 +42,17 @@ class MainActivity : ComponentActivity() {
           CalculatorApp(viewModel = viewModel)
         }
       }
+    }
+  }
+
+  private fun setupEdgeToEdge() {
+    WindowCompat.setDecorFitsSystemWindows(window, false)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      window.attributes.layoutInDisplayCutoutMode =
+        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      window.isNavigationBarContrastEnforced = false
     }
   }
 
